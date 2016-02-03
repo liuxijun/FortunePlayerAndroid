@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:orientation="vertical"
+              android:layout_width="fill_parent"
+              android:layout_height="fill_parent"
+        >
+
+    <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal">
+
+        <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="播放连接："
+                android:id="@+id/textView"/>
+
+        <EditText
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/editTextUrl"
+                android:layout_weight="1"
+                android:text="http://192.168.1.99:58080/encode/20151116152330_58767_wuyunbeihoudi_dexingfuxian.BD.1280x720.zhongyingshuangzimu.512K_640x480.m3u8.m3u8"
+                android:maxLines="1"
+                android:singleLine="true"/>
+
+        <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="测试"
+                android:id="@+id/buttonForTest"/>
+        <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="启动播放"
+                android:id="@+id/buttonDoPlay"/>
+    </LinearLayout>
+
+    <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_horizontal"
+            android:id="@+id/playerContainer">
+
+        <SurfaceView
+                android:layout_width="match_parent"
+                android:layout_height="250dp"
+                android:id="@+id/surfaceView"
+                android:layout_centerHorizontal="true"/>
+
+        <RelativeLayout
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:layout_alignParentBottom="true"
+                android:id="@+id/controller"
+                android:layout_centerHorizontal="true">
+
+            <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerVertical="true"
+                    android:text="0:00"
+                    android:id="@+id/tvBegin"/>
+
+            <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1:30:00"
+                    android:id="@+id/tvEnd"
+                    android:layout_centerVertical="true"
+                    android:layout_alignParentEnd="true"/>
+
+            <SeekBar
+                    android:layout_width="fill_parent"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/seekBar"
+                    android:layout_centerVertical="true"
+                    android:layout_toEndOf="@+id/tvBegin"
+                    android:layout_toStartOf="@+id/tvEnd"/>
+        </RelativeLayout>
+    </RelativeLayout>
+
+</LinearLayout>
+
