@@ -38,7 +38,7 @@ public class HlsDecoder extends BaseDecoder {
     public void init(){
         try {
             mediaCodecVideo =MediaCodec.createEncoderByType("Video/AVC");
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -46,60 +46,90 @@ public class HlsDecoder extends BaseDecoder {
         running = true;
         logger.debug("准备播放连接："+url);
         reader.start();
+        logger.debug("准备启动TS分离器...");
+        demuxer.start();
+        int i=0;
+        long startTime = System.currentTimeMillis();
         while(mediaCodecVideo==null){
             try {
                 Thread.sleep(100);
+                i++;
+                if(0==i%20){
+                    logger.debug("正在等待初始化解码器》。。。。");
+                }
+                if(i>=100){
+                    logger.error("超时了！等待了"+(System.currentTimeMillis()-startTime)+"毫秒，还没有初始化好！");
+                    break;
+                }
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-        mediaCodecVideo.getOutputBuffers();
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
         long timeoutUs = 3000l;
         ByteBuffer[] inputBuffers=null;
         ByteBuffer[] outputBuffers=null;
         outputBuffers = mediaCodecVideo.getOutputBuffers();
         inputBuffers = mediaCodecVideo.getInputBuffers();
-        while(running){
-            while((tags.size()<=0||mediaCodecVideo==null)&&running){
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+        if(mediaCodecVideo!=null){
+            startTime = System.currentTimeMillis()-1000;
+            long now;
+            long startPts = -1;
+            while(running){
+                while((tags.size()<=0||mediaCodecVideo==null)&&running){
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
-            }
-            if(!running){
-                break;
-            }
-            if(tags.size()>0){
-                if(mediaPlayer!=null&&!mediaPlayer.isPlaying()){
-                    mediaPlayer.setIsPlaying(true);
+                if(!running){
+                    break;
                 }
-                PES pes = tags.remove(0);
-                //tag.getData()
-                int inputBufferIndex = mediaCodecVideo.dequeueInputBuffer(timeoutUs);
-                int times = 0;
-                while(inputBufferIndex<0&&times<5){
-                    inputBufferIndex = mediaCodecVideo.dequeueInputBuffer(timeoutUs);
-                    times++;
-                }
-                ByteArray data = pes.data;
-                int length = (int)data.getBytesAvailable()-pes.payload;
-                inputBuffers[inputBufferIndex].put(data.getBuffers(), data.getBufferOffset() + pes.payload, length);
-                mediaCodecVideo.queueInputBuffer(inputBufferIndex,0,length,10000,0);
-                int outputBufferIndex = mediaCodecVideo.dequeueOutputBuffer(info,
-                        10000);
-                if (outputBufferIndex >= 0) {
-                    mediaCodecVideo.releaseOutputBuffer(outputBufferIndex, true);
-                } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
-                    mediaCodecVideo.getOutputBuffers();
-                } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    // Subsequent data will conform to new format.
-                    MediaFormat format = mediaCodecVideo.getOutputFormat();
-                }
-            }
+                if(tags.size()>0){
+                    if(mediaPlayer!=null&&!mediaPlayer.isPlaying()){
+                        mediaPlayer.setIsPlaying(true);
+                    }
 
+                    PES pes = tags.remove(0);
+                    //tag.getData()
+                    if(startPts<0){
+                        startPts = pes.pts;
+                    }
+                    now = System.currentTimeMillis();
+                    while(now-startTime<pes.pts-startPts){
+                        try {
+                            Thread.sleep(10);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    logger.debug("加载当前帧，准备解码：pes.pts="+pes.pts+",等待了同步时钟："+(System.currentTimeMillis()-now));
+                    int inputBufferIndex = mediaCodecVideo.dequeueInputBuffer(timeoutUs);
+                    int times = 0;
+                    while(inputBufferIndex<0&&times<5){
+                        inputBufferIndex = mediaCodecVideo.dequeueInputBuffer(timeoutUs);
+                        times++;
+                    }
+                    ByteArray data = pes.data;
+                    int length = (int)data.getBytesAvailable()-pes.payload;
+                    inputBuffers[inputBufferIndex].put(data.getBuffers(), data.getBufferOffset() + pes.payload, length);
+                    mediaCodecVideo.queueInputBuffer(inputBufferIndex,0,length,10000,0);
+                    int outputBufferIndex = mediaCodecVideo.dequeueOutputBuffer(info,
+                            10000);
+                    if (outputBufferIndex >= 0) {
+                        mediaCodecVideo.releaseOutputBuffer(outputBufferIndex, true);
+                    } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
+                        mediaCodecVideo.getOutputBuffers();
+                    } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                        // Subsequent data will conform to new format.
+                        MediaFormat format = mediaCodecVideo.getOutputFormat();
+                    }
+                }
+
+            }
         }
+        demuxer.stopDemuxer();
         if(mediaPlayer!=null){
             mediaPlayer.setIsPlaying(false);
         }

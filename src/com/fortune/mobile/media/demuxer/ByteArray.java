@@ -325,7 +325,7 @@ public class ByteArray {
         if(position>=0){
             return position;
         }
-        return buffers.length;
+        return 0;
     }
 
     public int readShort() {
@@ -369,4 +369,7 @@ public class ByteArray {
         return (int) bytesAvailable;
     }
 
+    public String toString(){
+        return TSDemuxer.bufferToHex(buffers,bufferOffset,16*4);
+    }
 }

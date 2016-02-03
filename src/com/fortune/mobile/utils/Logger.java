@@ -2,12 +2,16 @@ package com.fortune.mobile.utils;
 
 import android.util.Log;
 
+import java.util.logging.Level;
+
 /**
  * Created by xjliu on 2016/2/2.
  *
  */
 public class Logger {
     private String TAG;
+    private boolean isAndroid = false;
+    private java.util.logging.Logger logger;
     public static Logger getLogger(Class cls){
         return getLogger(cls.getSimpleName());
     }
@@ -16,14 +20,29 @@ public class Logger {
     }
     private Logger(String tag){
         this.TAG = tag;
+        if(!isAndroid){
+            logger = java.util.logging.Logger.getLogger(TAG);
+        }
     }
     public void debug(String msg){
-        Log.d(TAG,msg);
+        if(isAndroid){
+            Log.d(TAG,msg);
+        }else{
+            logger.log(Level.INFO,msg);
+        }
     }
     public void error(String msg){
-        Log.e(TAG,msg);
+        if(isAndroid){
+            Log.e(TAG, msg);
+        }else{
+            logger.log(Level.WARNING,msg);
+        }
     }
     public void warn(String msg){
-        Log.w(TAG,msg);
+        if(isAndroid){
+            Log.w(TAG, msg);
+        }else{
+            logger.log(Level.WARNING,msg);
+        }
     }
 }

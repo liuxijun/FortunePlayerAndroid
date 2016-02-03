@@ -69,7 +69,7 @@ public class TSDemuxer extends Thread{
     /* last AVCC byte Array */
     private ByteArray _avcc;
     Logger logger = Logger.getLogger(getClass().getName());
-    private boolean running = false;
+    private boolean running = true;
     public static boolean probe(ByteArray data)  {
         int pos = data.position;
         int len = Math.min((int)data.readed, 188 * 2);
@@ -113,6 +113,7 @@ public class TSDemuxer extends Thread{
         videoBuffer = new ByteArray(1024*1024*10);//10 MB buffer for video pes data
         audioBuffer = new ByteArray(1024*1024*5);//5MB buffer for audio pes data
         nalBuffer = new ByteArray(1024*1024*5);
+        _data = new ByteArray(1024*1024*10);
 //        _displayObject = displayObject;
     }
 
@@ -152,7 +153,8 @@ public class TSDemuxer extends Thread{
         int toPos = (int)_data.readed;
         //_data.readed = ByteArray.writeByteArray(_data.buffers, (int) _data.readed, buffer, startPos, length);
         System.arraycopy(buffer,startPos,_data.buffers,toPos,length);
-        //
+        _data.readed = toPos+length;
+        //logger.debug("buffer appened:_data.position=" + _data.position + ",readed=" + _data.readed);
         return _data.readed;
     }
     public void append(ByteArray data){
@@ -193,16 +195,23 @@ public class TSDemuxer extends Thread{
         running = false;
     }
 
-    public void run(/*e : Event*/){
+    public void run(){
         long start_time = getTimer();
+        logger.debug("准备启动分离器");
         _data.position = _read_position;
         // dont spend more than 20ms demuxing TS packets to avoid loosing frames
         long byteReaded = _data.readed;
         long byteLeft = byteReaded-_data.position;
         running = true;
+        int i=0;
         while(byteLeft<188&&running){
             try {
                 Thread.sleep(40);
+                i++;
+                if(i%25==0){
+                    logger.debug("数据尚未就绪，等待了"+i+"次");
+                }
+                byteLeft = _data.readed-_data.position;
             } catch (InterruptedException e) {
                 e.printStackTrace();
                 running = false;
@@ -213,23 +222,42 @@ public class TSDemuxer extends Thread{
             while (byteLeft < 188&&running) {
                 try {
                     Thread.sleep(40);
+                    i++;
+                    if(i%25==0){
+                        logger.debug("数据尚未就绪，等待了"+i+"次");
+                    }
+                    if(i>250){
+                        logger.error("超时了！不再等待TS流过来了");
+                        running = false;
+                        break;
+                    }
+                    //logger.debug("数据尚未就绪，byteLeft="+byteLeft+",_data.readed="+_data.readed+",_data.position="+_data.position);
+                    byteLeft = _data.readed - _data.position;
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                     running = false;
                     break;
                 }
             }
+            if(!running){
+                break;
+            }
+            i=0;
             _parseTSPacket();
-            if (_data.readed > _data.position) {
+            if (_data.readed >= _data.position) {
+                //剩余的数据，如果当前指针在准备处理的指针之后，则直接计算当前剩余量
                 byteLeft = _data.readed - _data.position;
             } else {
+                //如果当前已经存好的数据指针，在处理的指针之前，那就是数据已经绕回来了，找到当前缓冲区最高点，减去当前的处理位置，就是剩余的数据
                 byteLeft = _data.getAvailableBytes() - _data.position;
-                if (byteLeft <= 0) {
+                if (byteLeft <= 0) {//如果数据用光了，就从头再来
                     byteLeft = _data.readed;
+                    _data.bytesAvailable = _data.readed;
                     _data.position = 0;
                 }
             }
         }
+/*
         int length = videoBuffer.bufferOffset;
         if(_curVideoPES!=null){
             length += _curAudioPES.getAvailableBytes();
@@ -266,6 +294,7 @@ public class TSDemuxer extends Thread{
             }
         }
 
+*/
         logger.debug("_parseTimer finished!");
     }
     /** flux demux **/
@@ -618,6 +647,7 @@ public class TSDemuxer extends Thread{
     }
 
     /** Parse TS packet. **/
+    long totalVideoLength = 0;
     private void _parseTSPacket(){
         // Each packet is 188 bytes.
         int todo  = TSDemuxer.PACKETSIZE;
@@ -757,7 +787,12 @@ public class TSDemuxer extends Thread{
                     if (0!=stt) {
                         if (null!=_curVideoPES) {
                             //
-                            _curVideoBufferPos = _curVideoPES.bufferOffset+_curVideoPES.getLength();
+                            totalVideoLength+=_curVideoPES.bytesAvailable;
+                            _curVideoBufferPos = _curVideoPES.bufferOffset+(int)_curVideoPES.bytesAvailable;
+                            if(_curVideoBufferPos>=videoBuffer.buffers.length-128*1024){
+                                logger.error("数据越界了！"+_curVideoBufferPos+",_data.position="+_data.position);
+                                _curVideoBufferPos = 0;
+                            }
                             try {
 /*
                                 logger.debug("To process AVCPES:current size "+_curVideoPES.position+" bytes,"+
@@ -767,7 +802,9 @@ public class TSDemuxer extends Thread{
                                         _curVideoPES.buffers[0],_curVideoPES.buffers[1],
                                                 _curVideoPES.buffers[2],_curVideoPES.buffers[3]));
 */
+                                //logger.debug("videoPES:_curVideoPES.bufferOffset="+_curVideoPES.bufferOffset+",bytesAvailable="+_curVideoPES.bytesAvailable+",_data.position="+_data.position);
                                 _parseAVCPES(new PES(_curVideoPES, false));
+                                //logger.debug("videoPES:_curVideoPES.bufferOffset="+_curVideoPES.bufferOffset+",bytesAvailable="+_curVideoPES.bytesAvailable+",_data.position="+_data.position);
                             } catch (Exception e) {
                                 logger.error("To process AVCPES failed:current size " + _curVideoPES.position + " bytes,position=" +
                                         _curVideoPES.bufferOffset+"(0x" +

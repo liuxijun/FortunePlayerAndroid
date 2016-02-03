@@ -8,7 +8,7 @@ import java.util.Vector;
 
 /**
  * Created by xjliu on 2016/1/15.
- * ²âÊÔ·ÖÀëÆ÷
+ * æµ‹è¯•åˆ†ç¦»å™¨
  */
 public class Testor extends Thread implements Decoder {
     Logger logger = Logger.getLogger(Testor.class);
@@ -23,19 +23,18 @@ public class Testor extends Thread implements Decoder {
                 "0004.ts"};
         Testor testor = new Testor();
         TSDemuxer demuxer = new TSDemuxer(testor);
-        testor.start();
+        demuxer.start();
         byte[] buffer = new byte[1024*128];
-        boolean startDemuxer = false;
         for(String fileName:fileNames){
             File file = new File(path+fileName);
             if(file.exists()){
                 try {
-                    logger.debug("ÕıÔÚ×¼±¸·ÖÎö£º"+file.getAbsolutePath()+","+ (file.length())+","+file.length()/188+"blocks");
+                    logger.debug("Try to read TS file:"+file.getAbsolutePath()+","+ (file.length())+","+file.length()/188+"blocks");
                     InputStream is = new FileInputStream(file);
                     DataInputStream dataReader = new DataInputStream(is);
                     int len = dataReader.read(buffer);
                     while(len>0){
-                        //logger.debug("×·¼ÓÊı¾İ£º" + len + "×Ö½Ú");
+                        //logger.debug("è¿½åŠ æ•°æ®ï¼š" + len + "å­—èŠ‚");
                         demuxer.append(buffer,0,len);
                         len = dataReader.read(buffer);
                     }
@@ -45,9 +44,10 @@ public class Testor extends Thread implements Decoder {
                     e.printStackTrace();
                 }
             }else{
-                logger.error("ÎÄ¼ş²»´æÔÚ£º"+file.getAbsolutePath());
+                logger.error("æ–‡ä»¶ä¸å­˜åœ¨ï¼š"+file.getAbsolutePath());
             }
         }
+
     }
 
     @Override
@@ -57,15 +57,15 @@ public class Testor extends Thread implements Decoder {
 
     @Override
     public void onVideoSizeChanged(int width, int height) {
-
+        logger.debug("è·å–åˆ°äº†è§†é¢‘å¤§å°ï¼š"+width+"x"+height);
     }
 
     public void onFramesReady(PES pes) {
-
+        logger.debug("æœ‰PESæ•°æ®æ¥äº†ï¼Œå‡†å¤‡è§£ç ï¼Œpts="+pes.pts+",payload="+pes.payload+",len="+(pes.data.bytesAvailable-pes.payload));
     }
 
     @Override
     public void finished() {
-
+        logger.debug("ç»“æŸäº†");
     }
 }
