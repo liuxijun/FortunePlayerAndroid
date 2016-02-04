@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * Created by xjliu on 2014/7/13.
- * M3U8¸ñÊ½
+ * M3U8æ ¼å¼
  */
 public class M3U8 {
     private Logger logger = Logger.getLogger(getClass());
@@ -67,10 +67,10 @@ public class M3U8 {
             return newM3u8Url;
         }
         String protocol = "http://";
-        String result = sourceUrl.substring(7);//Ìø¹ıhttp://Õâ7¸ö×ÖÄ¸
+        String result = sourceUrl.substring(7);//è·³è¿‡http://è¿™7ä¸ªå­—æ¯
         if(sourceUrl.startsWith("https://")){
             protocol = "https://";
-            result = sourceUrl.substring(8);//Ìø¹ıhttps://Õâ8¸ö×ÖÄ¸
+            result = sourceUrl.substring(8);//è·³è¿‡https://è¿™8ä¸ªå­—æ¯
         }
         if(newM3u8Url.startsWith("/")){
             int p = result.indexOf("/");
@@ -114,7 +114,7 @@ public class M3U8 {
                         if(newM3u8Url!=null&&!newM3u8Url.startsWith("#")){
                             ServerMessager messager = new ServerMessager();
                             String newUrl = repairUrl(url,newM3u8Url);
-                            logger.debug("³¢ÊÔÏÂÔØM3U8£º"+newUrl);
+                            logger.debug("å°è¯•ä¸‹è½½M3U8ï¼š"+newUrl);
                             String newM3u8Content = messager.postToHost(newUrl,null);
                             if(newM3u8Content!=null&&!"".equals(newM3u8Content)){
                                 addStream(new M3U8Stream(bw,progId,newUrl,newM3u8Content));
@@ -164,7 +164,7 @@ public class M3U8 {
                 sb.append(stream.getUrl()).append("\n");
             }
         }else{
-            //ÏÈÕÒµ½¼¸µÀÁ÷ÖĞ×î´óµÄtargetDuration
+            //å…ˆæ‰¾åˆ°å‡ é“æµä¸­æœ€å¤§çš„targetDuration
             int maxTargetDuration = -1;
             int maxMediaSequence=0;
             for(M3U8Stream stream:streams){
@@ -188,9 +188,9 @@ public class M3U8 {
                     sb.append("#EXT-X-ALLOW-CACHE:YES\n");
                     sb.append("#").append(M3U8Stream.TARGET_DURATION).append(":").append(Math.round(stream.getTargetDuration())).append("\n");
                 }
-                if(stream.isLive()){//Ö»ÒªÓĞÒ»¸öÖ±²¥Á÷»ìÔÚÀïÃæ£¬¾ÍÉèÖÃÎªÖ±²¥¡£Ä¿Ç°µÄÇé¿öÏÂ£¬ÎÒÃÇ¶ÔÖ±²¥µÄ´¦Àí»¹²»¹»Ô²Èó£¬ËùÒÔÔİÊ±
-                    //ÔİÊ±ÎŞ·¨¶ÔÖ±²¥Ìá¹©½ÏºÃµÄ¹ã¸æ²å²¥¡£ÒòÎªÔÚ²¥·ÅÊ±»áÓĞÎÊÌâ¡£¿Í»§¶Ë»á·´¸´ÇëÇóm3u8ÁĞ±í£¬Õâ¸öÁĞ±íÒ²»á±ä»¯¡£ÎÒÃÇ´¦Àí
-                    //ºó»áµ¼ÖÂÄ³Ğ©²¥·ÅµÄ¿é²»Õı³£¡£
+                if(stream.isLive()){//åªè¦æœ‰ä¸€ä¸ªç›´æ’­æµæ··åœ¨é‡Œé¢ï¼Œå°±è®¾ç½®ä¸ºç›´æ’­ã€‚ç›®å‰çš„æƒ…å†µä¸‹ï¼Œæˆ‘ä»¬å¯¹ç›´æ’­çš„å¤„ç†è¿˜ä¸å¤Ÿåœ†æ¶¦ï¼Œæ‰€ä»¥æš‚æ—¶
+                    //æš‚æ—¶æ— æ³•å¯¹ç›´æ’­æä¾›è¾ƒå¥½çš„å¹¿å‘Šæ’æ’­ã€‚å› ä¸ºåœ¨æ’­æ”¾æ—¶ä¼šæœ‰é—®é¢˜ã€‚å®¢æˆ·ç«¯ä¼šåå¤è¯·æ±‚m3u8åˆ—è¡¨ï¼Œè¿™ä¸ªåˆ—è¡¨ä¹Ÿä¼šå˜åŒ–ã€‚æˆ‘ä»¬å¤„ç†
+                    //åä¼šå¯¼è‡´æŸäº›æ’­æ”¾çš„å—ä¸æ­£å¸¸ã€‚
                     isLive = true;
                 }
                 //String streamUrl = stream.getUrl();
@@ -219,7 +219,7 @@ public class M3U8 {
                 for(;segIdx<segLength;segIdx++){
                     M3U8Segment segment = segments.get(segIdx);
                     String segmentUrl =segment.getUrl();
-                    if(relateUrlType){//Èç¹ûÊÇÏà¶ÔÂ·¾¶Ä£Ê½£¬¾Í½ØÈ¡url£¬±£Áôµ±Ç°urlÄ¿Â¼ÒÔÏÂµÄ
+                    if(relateUrlType){//å¦‚æœæ˜¯ç›¸å¯¹è·¯å¾„æ¨¡å¼ï¼Œå°±æˆªå–urlï¼Œä¿ç•™å½“å‰urlç›®å½•ä»¥ä¸‹çš„
                         p = segmentUrl.indexOf(streamUrlPath);
                         if(p>=0){
                             segmentUrl = segmentUrl.substring(p+streamUrlPathLength);
@@ -227,10 +227,10 @@ public class M3U8 {
                     }
                     p=segmentUrl.indexOf("?");
                     if(p<0){
-                        //Èç¹ûsegmentµÄurlÃ»ÓĞ²ÎÊı£¬¾Í°ÑstreamµÄ²ÎÊı×÷Îª²ÎÊı¡£
+                        //å¦‚æœsegmentçš„urlæ²¡æœ‰å‚æ•°ï¼Œå°±æŠŠstreamçš„å‚æ•°ä½œä¸ºå‚æ•°ã€‚
                         segmentUrl+=queryString;
                     }else{
-                        //Èç¹ûsegmentµÄurlÓĞ²ÎÊı£¬¾Í¿´¿´queryStringºÍÏÖÓĞµÄ²ÎÊı£¬ÓĞÖØ¸´µÄ£¬È¡queryStringÀïµÄ£¬Ã»ÓĞ¾ÍÆ´ÔÚÒ»Æğ¡£
+                        //å¦‚æœsegmentçš„urlæœ‰å‚æ•°ï¼Œå°±çœ‹çœ‹queryStringå’Œç°æœ‰çš„å‚æ•°ï¼Œæœ‰é‡å¤çš„ï¼Œå–queryStringé‡Œçš„ï¼Œæ²¡æœ‰å°±æ‹¼åœ¨ä¸€èµ·ã€‚
                         if(!"".equals(queryString)){
                             String segmentQueryString = segmentUrl.substring(p+1);
                             Map<String,List<String>> parameters = new HashMap<String, List<String>>();
@@ -266,7 +266,7 @@ public class M3U8 {
         if(queryString.startsWith("?")){
             queryString = queryString.substring(1);
         }
-        logger.debug("×¼±¸·ÖÎö²ÎÊı£º"+queryString);
+        logger.debug("å‡†å¤‡åˆ†æå‚æ•°ï¼š"+queryString);
         String[] data = queryString.split("&");
         for(String nameAndValue:data){
             if(nameAndValue.startsWith("amp;")){
@@ -301,7 +301,7 @@ public class M3U8 {
                 }
             }
         }
-        logger.debug("·ÖÎö²ÎÊı¸´ºÏ½á¹û£º"+result);
+        logger.debug("åˆ†æå‚æ•°å¤åˆç»“æœï¼š"+result);
         return result;
     }
     public boolean isRelateUrlType() {

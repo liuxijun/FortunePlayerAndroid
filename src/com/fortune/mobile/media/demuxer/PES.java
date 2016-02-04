@@ -1,10 +1,13 @@
 package com.fortune.mobile.media.demuxer;
 
+import com.fortune.mobile.utils.Logger;
+
 /**
  * Created by xjliu on 2016/1/14.
  *
  */
 public class PES {
+    private Logger logger = Logger.getLogger(this.getClass());
     /** Is it AAC audio or AVC video. **/
     public boolean audio;
     /** The PES data (including headers). **/
@@ -37,6 +40,8 @@ public class PES {
             0x1BD is special case, could be audio or video (ffmpeg\libavformat\mpeg.c)
              */
         if ((audio && (prefix > 0x1df || prefix < 0x1c0 && prefix != 0x1bd)) || (!audio && prefix != 0x1e0 && prefix != 0x1ea && prefix != 0x1bd)) {
+            logger.error("PES start code not found or not AAC/AVC: " + String.format("0x%X",prefix)+",bufferOffset="+
+                    data.bufferOffset+",bytesAvailable="+data.bytesAvailable+",position="+data.position);
             throw new Error("PES start code not found or not AAC/AVC: " + String.format("0x%X",prefix));
         }
         // read len

@@ -14,4 +14,5 @@ public interface Decoder {
     void onVideoSizeChanged(int width,int height);
     void onFramesReady(PES pes);
     void finished();
+    void onTsFinished();
 }

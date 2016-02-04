@@ -41,5 +41,10 @@ public class BaseDecoder extends Thread implements Decoder{
 
     }
 
+    @Override
+    public void onTsFinished() {
+
+    }
+
 
 }

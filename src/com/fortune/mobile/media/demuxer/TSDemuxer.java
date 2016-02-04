@@ -45,7 +45,7 @@ public class TSDemuxer extends Thread{
     private ByteArray videoBuffer;
     private ByteArray audioBuffer;
     private ByteArray nalBuffer;
-    private ByteArray _data;
+    public ByteArray _data;
     private Decoder decoder;
     /* callback functions for audio selection, and parsing progress/complete */
     //private var _callback_audioselect : Function;
@@ -70,6 +70,11 @@ public class TSDemuxer extends Thread{
     private ByteArray _avcc;
     Logger logger = Logger.getLogger(getClass().getName());
     private boolean running = true;
+    private boolean _dataReward = false;
+    private boolean streamFinished = false;
+    public void setStreamFinished(boolean streamFinished){
+        this.streamFinished = streamFinished;
+    }
     public static boolean probe(ByteArray data)  {
         int pos = data.position;
         int len = Math.min((int)data.readed, 188 * 2);
@@ -131,19 +136,52 @@ public class TSDemuxer extends Thread{
             //_displayObject.addEventListener(Event.ENTER_FRAME, _parseTimer);
         }
         //_data.position =(int) _data.readed;
-        if(_data.readed+length>_data.buffers.length){
+        if(_data.readed+length>_data.buffers.length-1024*64){
             //缓冲区已经到底了，需要从头再填充进去。
-            logger.debug("buffer overflow!Refill from header! current length=" + _data.buffers.length + ",readed=" + _data.readed);
-            _data.readed = 0;
-        }else{
-            //如果当前指针小于当前读取指针，那就意味着这个缓冲区是从头填充，但尾部还没有用完。
-            while(_data.readed<_data.position&&_data.readed+length>=_data.position&&running){
-                try {
-                    Thread.sleep(40);
-                    logger.debug("缓冲区没用完，等待使用完再填充进去：curPos="+_data.position+",等待填充的界限是："+(_data.readed+length));
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+            //想办法把188字节对齐了，否则后面处理会有问题
+            int byteLeft = (int)_data.bytesAvailable%188;
+            if(byteLeft!=0){
+                int tempLength = 188-byteLeft;
+                if(tempLength>length){
+                    tempLength = length;
                 }
+                System.arraycopy(buffer,startPos,_data.buffers,(int)_data.bytesAvailable,tempLength);
+                _data.bytesAvailable +=tempLength;
+                startPos += tempLength;
+                length -=tempLength;
+            }
+            logger.debug("buffer overflow!Refill from header! current length=" + _data.buffers.length +
+                    ",readed=" + _data.readed+",will fill length="+length+",bytesAvailable="+
+                    _data.bytesAvailable+","+((byteLeft==0)?"已对齐":("未对齐，剩余字节"+byteLeft+"bytes")));
+            _data.readed = 0;
+            _dataReward = true;
+        }else{
+            /**
+             * 有几种情况：
+             * 1、当前处理的指针小于当前已经填充的位置，可以继续处理
+             * 2、当前处理的指针大于当前已经填充的位置+数据长度，可以继续处理
+             * 3、当前处理的指针大于当前已经填充的位置，但小于当前已经填充位置+数据长度，等待
+             *                  处理指针继续向后处理并超过了要添加的数据长度，或处理指针重头再处理
+             *
+             */
+            if(_data.readed+length<_data.position||_data.readed>=_data.position) {
+                //如果当前填充的指针小于可用指针，意味着重新填充的数据还没追上当前处理的数据，可以放心的填充
+            //}else if(){
+            }else{
+                //如果追过来的数据可能会超过
+                int i=0;
+                while(_data.readed<_data.position&&_data.readed+length>=_data.position&&running){
+                    try {
+                        Thread.sleep(40);
+                        if(i%25==0){
+                            logger.debug("缓冲区没用完，等待使用完再填充进去：curPos="+_data.position+",等待填充的界限是："+(_data.readed+length)+"，已经等待"+(i+1)+"次");
+                        }
+                        i++;
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+
             }
 //            logger.debug(""+length);
             if(!running){
@@ -152,9 +190,15 @@ public class TSDemuxer extends Thread{
         }
         int toPos = (int)_data.readed;
         //_data.readed = ByteArray.writeByteArray(_data.buffers, (int) _data.readed, buffer, startPos, length);
-        System.arraycopy(buffer,startPos,_data.buffers,toPos,length);
-        _data.readed = toPos+length;
+        if(length>0){
+            System.arraycopy(buffer,startPos,_data.buffers,toPos,length);
+            _data.readed = toPos+length;
+        }
         //logger.debug("buffer appened:_data.position=" + _data.position + ",readed=" + _data.readed);
+        if(_data.readed>_data.bytesAvailable){
+            //如果已经填充的指针，大于当前可用指针，就重新设置当前可用指针
+            _data.bytesAvailable = _data.readed;
+        }
         return _data.readed;
     }
     public void append(ByteArray data){
@@ -198,7 +242,7 @@ public class TSDemuxer extends Thread{
     public void run(){
         long start_time = getTimer();
         logger.debug("准备启动分离器");
-        _data.position = _read_position;
+        _data.position = 0;
         // dont spend more than 20ms demuxing TS packets to avoid loosing frames
         long byteReaded = _data.readed;
         long byteLeft = byteReaded-_data.position;
@@ -219,12 +263,12 @@ public class TSDemuxer extends Thread{
             }
         }
         while (running/* && ((getTimer() - start_time) < 20)*/){
-            while (byteLeft < 188&&running) {
+            while (byteLeft < 188&&running&&(!streamFinished)) {
                 try {
                     Thread.sleep(40);
                     i++;
                     if(i%25==0){
-                        logger.debug("数据尚未就绪，等待了"+i+"次");
+                        logger.debug("数据尚未就绪，等待了"+i+"次，byteLeft="+byteLeft);
                     }
                     if(i>250){
                         logger.error("超时了！不再等待TS流过来了");
@@ -232,14 +276,32 @@ public class TSDemuxer extends Thread{
                         break;
                     }
                     //logger.debug("数据尚未就绪，byteLeft="+byteLeft+",_data.readed="+_data.readed+",_data.position="+_data.position);
-                    byteLeft = _data.readed - _data.position;
+                    byteLeft = _data.bytesAvailable - _data.position;
+                    if(byteLeft==188){
+                        logger.debug("可能已经到顶了：bytesAvailable="+_data.bytesAvailable+",position="+_data.position);
+                    }
+                    if(byteLeft<188){
+                        //数据读取完毕，看看是否需要从头再来
+                        if(running&&_dataReward){
+                            logger.debug("数据使用完毕，重头再来一次：position="+_data.position+",bytesAvailable="
+                                    +_data.bytesAvailable+",readed="+_data.readed);
+                            _data.position = 0;
+                            _data.bytesAvailable = _data.readed;
+                            _dataReward = false;
+                        }
+                    }
+/*
+                    if(_data.readed>_data.position){
+                    }else{
+                    }
+*/
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                     running = false;
                     break;
                 }
             }
-            if(!running){
+            if(!running||(byteLeft<188&&streamFinished)){
                 break;
             }
             i=0;
@@ -295,7 +357,9 @@ public class TSDemuxer extends Thread{
         }
 
 */
+        running = false;
         logger.debug("_parseTimer finished!");
+        decoder.finished();
     }
     /** flux demux **/
     private void _flush() {
@@ -658,10 +722,10 @@ public class TSDemuxer extends Thread{
                 int pos_end = _data.position;
                 {
                     logger.warn("TS: lost sync between offsets:" + pos_start + "/" + pos_end);
-                    ByteArray ba = new ByteArray(pos_end - pos_start);
-                    _data.position = pos_start;
-                    _data.readBytes(ba, 0, pos_end - pos_start);
-                    logger.debug("TS: lost sync dump:" + bufferToHex(ba.buffers));
+//                    ByteArray ba = new ByteArray(_datapos_end - pos_start);
+//                    _data.position = pos_start;
+//                    _data.readBytes(ba, 0, pos_end - pos_start);
+                    logger.debug("TS: lost sync dump:" + bufferToHex(_data.buffers,pos_start,pos_end-pos_start));
                 }
                 _data.position = pos_end + 1;
             } else {
@@ -730,13 +794,17 @@ public class TSDemuxer extends Thread{
                     if (stt!=0) {
                         if (null!=_curAudioPES) {
                             _curAudioOffset = _curAudioPES.bufferOffset+_curAudioPES.position;
+                            if(_curAudioOffset>=audioBuffer.buffers.length-128*1024){
+                                logger.debug("audioBuffer reward!");
+                                _curAudioOffset = 0;
+                            }
                             if (_audioIsAAC) {
                                 _parseADTSPES(new PES(_curAudioPES, true));
                             } else {
                                 _parseMPEGPES(new PES(_curAudioPES, true));
                             }
                         }
-                        _curAudioPES = new ByteArray(audioBuffer,_curAudioOffset);//��Ƶ֡��������512k
+                        _curAudioPES = new ByteArray(audioBuffer,_curAudioOffset);
                     }
                     if (null!=_curAudioPES) {
                         _curAudioPES.writeBytes(_data, _data.position, todo);
@@ -1023,4 +1091,11 @@ public class TSDemuxer extends Thread{
         }
     }
 
+    public boolean isRunning() {
+        return running;
+    }
+
+    public void setRunning(boolean running) {
+        this.running = running;
+    }
 }

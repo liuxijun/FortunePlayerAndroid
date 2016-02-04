@@ -31,7 +31,7 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
     RelativeLayout controller;
     SeekBar seekBar;
     MyUiHandler myUiHandler;
-    HlsDecoder decoder;
+    HlsDecoder decoder=null;
     /**
      * Called when the activity is first created.
      */
@@ -63,8 +63,8 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
             });
         }
         Button buttonDoTest = (Button) findViewById(R.id.buttonForTest);
-        if (buttonDoPlay != null) {
-            buttonDoPlay.setOnClickListener(new View.OnClickListener() {
+        if (buttonDoTest != null) {
+            buttonDoTest.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
                     doTestPlay();
@@ -84,7 +84,7 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
                 Toast.makeText(this, "URL不能为空！", Toast.LENGTH_SHORT).show();
             } else {
                 try {
-                    Log.d(TAG, "尝试播放：" + url);
+                    Log.d(TAG, "测试播放：" + url);
                     getWindow().setFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     decoder = new HlsDecoder(null,url,surfaceHolder.getSurface());
                     decoder.start();
@@ -221,6 +221,9 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
     public void onStop() {
         if (mediaPlayer != null) {
             mediaPlayer.stop();
+        }
+        if(decoder!=null){
+            decoder.stopDecoder();
         }
         super.onStop();
     }
@@ -444,4 +447,5 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
             }
         }
     };
+
 }

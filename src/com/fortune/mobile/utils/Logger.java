@@ -2,6 +2,7 @@ package com.fortune.mobile.utils;
 
 import android.util.Log;
 
+import java.util.Date;
 import java.util.logging.Level;
 
 /**
@@ -10,7 +11,7 @@ import java.util.logging.Level;
  */
 public class Logger {
     private String TAG;
-    private boolean isAndroid = false;
+    private boolean isAndroid = true;
     private java.util.logging.Logger logger;
     public static Logger getLogger(Class cls){
         return getLogger(cls.getSimpleName());
@@ -28,21 +29,21 @@ public class Logger {
         if(isAndroid){
             Log.d(TAG,msg);
         }else{
-            logger.log(Level.INFO,msg);
+            logger.log(Level.INFO,StringUtils.date2string(new Date())+" "+TAG+" - "+msg);
         }
     }
     public void error(String msg){
         if(isAndroid){
             Log.e(TAG, msg);
         }else{
-            logger.log(Level.WARNING,msg);
+            logger.log(Level.WARNING,StringUtils.date2string(new Date())+" "+TAG+" - "+msg);
         }
     }
     public void warn(String msg){
         if(isAndroid){
             Log.w(TAG, msg);
         }else{
-            logger.log(Level.WARNING,msg);
+            logger.log(Level.WARNING,StringUtils.date2string(new Date())+" "+TAG+" - "+msg);
         }
     }
 }

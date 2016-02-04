@@ -39,12 +39,12 @@ public class M3U8Stream {
         if(m3u8!=null){
             m3u8 = m3u8.trim();
             isLiveStream = true;
-            if(m3u8.startsWith("#EXTM3U")){//àÅ£¬ÕâÊÇÒ»¸öm3u8
+            if(m3u8.startsWith("#EXTM3U")){//å—¯ï¼Œè¿™æ˜¯ä¸€ä¸ªm3u8
                 String[] lines = m3u8.split("\n");
                 float segmentDuration = 0;
                 String segmentUrl;
                 for(int i=1,l=lines.length;i<l;i++){
-                    //µÚÒ»ÐÐÌø¹ý
+                    //ç¬¬ä¸€è¡Œè·³è¿‡
                     String line = lines[i].trim();
                     if(line.startsWith("#"+TARGET_DURATION+":")){
                         line = line.substring(TARGET_DURATION.length()+2);
@@ -67,17 +67,17 @@ public class M3U8Stream {
                             segmentDuration = 0;
                         }
                     }else if(line.startsWith("#"+END_LIST)){
-                        logger.debug("ÒÑµ½½áÎ²£¬²»ÔÙ´¦Àí");
+                        logger.debug("å·²åˆ°ç»“å°¾ï¼Œä¸å†å¤„ç†");
                         isLiveStream = false;
                         break;
                     }else if(line.startsWith("#")){
-                        logger.warn("ÔÝÊ±»¹²»Ö§³ÖµÄÖ¸Áî£º"+line);
+                        logger.warn("æš‚æ—¶è¿˜ä¸æ”¯æŒçš„æŒ‡ä»¤ï¼š"+line);
                     }else{
                         //
                         segmentUrl = line;
                         if(!segmentUrl.startsWith("http://")){
                             int p=segmentUrl.indexOf("/");
-                            if(p==0){//Èç¹ûÊÇ¾ø¶ÔµØÖ·£¬¾ÍÒª°Ñstream.url
+                            if(p==0){//å¦‚æžœæ˜¯ç»å¯¹åœ°å€ï¼Œå°±è¦æŠŠstream.url
                                 String clearUrl = StringUtils.getClearURL(url);
                                 segmentUrl = url.substring(0,url.length()-clearUrl.length())+segmentUrl;
                             }else{

@@ -18,7 +18,7 @@ import java.util.Map;
  * User: xjliu
  * Date: 2010-3-4
  * Time: 10:14:47
- * Óë·şÎñÆ÷µÄĞÅÏ¢Í¨Ñ¶
+ * ä¸æœåŠ¡å™¨çš„ä¿¡æ¯é€šè®¯
  */
 public class ServerMessager {
     protected Map<String,String> parameters= new HashMap<String,String>();
@@ -60,7 +60,7 @@ public class ServerMessager {
     }
 
     public String getMessage(String ip, int port, String url, String parameter) {
-        logger.debug("·şÎñÆ÷£º" + ip + ",¶Ë¿Ú£º" + port + ",url£º" + url+"Êı¾İ£º" + parameter);
+        logger.debug("æœåŠ¡å™¨ï¼š" + ip + ",ç«¯å£ï¼š" + port + ",urlï¼š" + url+"æ•°æ®ï¼š" + parameter);
         if(!url.startsWith("/")){
             url = "/"+url;
         }
@@ -73,7 +73,7 @@ public class ServerMessager {
         }
         hostUrl += url;
         String result = postToHost(hostUrl, parameter);
-        logger.debug("·şÎñÆ÷·µ»Ø:" + result);
+        logger.debug("æœåŠ¡å™¨è¿”å›:" + result);
         return result;
     }
     public List<StreamData> download(String url){
@@ -97,15 +97,15 @@ public class ServerMessager {
                 }
             }
             if(code==HttpURLConnection.HTTP_OK){
-                logger.debug("HTTPÇëÇóÍê³É£º"+url);
+                logger.debug("HTTPè¯·æ±‚å®Œæˆï¼š"+url);
             }else{
-                logger.error("HTTPÇëÇó·¢Éú´íÎó£º" + code + "\n" +
+                logger.error("HTTPè¯·æ±‚å‘ç”Ÿé”™è¯¯ï¼š" + code + "\n" +
                         data);
             }
             //data = new String(d);
             con.disconnect();
         } catch (Exception ex) {
-            logger.error("ÎŞ·¨Á¬½Ó£º" + url);
+            logger.error("æ— æ³•è¿æ¥ï¼š" + url);
             //ex.printStackTrace();
         }
 
@@ -144,7 +144,7 @@ public class ServerMessager {
 
             InputStream is = con.getInputStream();
             DataInputStream dis = new DataInputStream(is);
-            //System.out.println("POST·µ»ØÇøÓò´óĞ¡£º"+dis.available());
+            //System.out.println("POSTè¿”å›åŒºåŸŸå¤§å°ï¼š"+dis.available());
             int code = con.getResponseCode();
             byte d[] = new byte[1024*10];
             data = "";
@@ -160,15 +160,15 @@ public class ServerMessager {
                 }
             }
             if(code==HttpURLConnection.HTTP_OK){
-                logger.debug("HTTPÇëÇóÍê³É£º"+url);
+                logger.debug("HTTPè¯·æ±‚å®Œæˆï¼š"+url);
             }else{
-                logger.warn("HTTPÇëÇó·¢Éú´íÎó£º"+code+"\n" +
+                logger.warn("HTTPè¯·æ±‚å‘ç”Ÿé”™è¯¯ï¼š"+code+"\n" +
                         data);
             }
             //data = new String(d);
             con.disconnect();
         } catch (Exception ex) {
-            logger.warn("ÎŞ·¨Á¬½Ó£º" + url+" ,´íÎóĞÅÏ¢:"+ex.getMessage());
+            logger.warn("æ— æ³•è¿æ¥ï¼š" + url+" ,é”™è¯¯ä¿¡æ¯:"+ex.getMessage());
             //ex.printStackTrace();
         }
         return data;

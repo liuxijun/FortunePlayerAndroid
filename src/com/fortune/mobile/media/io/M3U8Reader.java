@@ -13,7 +13,7 @@ import java.util.Date;
 
 /**
  * Created by xjliu on 2014/10/12.
- * ±£´æM3U8£¬°üÀ¨Ã½ÌåÎÄ¼ş
+ * ä¿å­˜M3U8ï¼ŒåŒ…æ‹¬åª’ä½“æ–‡ä»¶
  */
 public class M3U8Reader extends Thread {
     private String url;
@@ -23,6 +23,8 @@ public class M3U8Reader extends Thread {
     public static final int STATUS_FINISHED=1;
     public static final int STATUS_RUNNING=2;
     public static final int STATUS_IO_ERROR=-1;
+    private boolean loading=true;
+
     public M3U8Reader(Decoder decoder,String url){
         this.url = url;
         this.decoder = decoder;
@@ -45,7 +47,7 @@ public class M3U8Reader extends Thread {
 
     public void beforeStart() {
         startTime = new Date();
-        logs ="";//"\r\n"+ StringUtils.date2string(new Date())+" - " +msgHeader+"ÒÑ¾­Æô¶¯";
+        logs ="";//"\r\n"+ StringUtils.date2string(new Date())+" - " +msgHeader+"å·²ç»å¯åŠ¨";
     }
 
     boolean willStop = false;
@@ -78,7 +80,7 @@ public class M3U8Reader extends Thread {
                             currentPos += segment.getDuration();
                             reportProcess(allM3U8Duration,currentPos);
                         }else{
-                            logger.error("ÎŞ·¨±£´æ£º"+(segment.getUrl()));
+                            logger.error("æ— æ³•ä¿å­˜ï¼š"+(segment.getUrl()));
                         }
                     }
                     long allDuration = System.currentTimeMillis()-startTime.getTime();
@@ -99,22 +101,24 @@ public class M3U8Reader extends Thread {
         while(secondStr.length()<2){
             secondStr = "0"+secondStr;
         }
+        loading =false;
         logs ="\n"+StringUtils.date2string(startTime)+"->"+StringUtils.date2string(stopTime)+
                 ",bandwidth="+allBandwidth+",duration="+(duration/60)+":"+secondStr;
-        reportStatus(allM3U8Duration,-1,STATUS_FINISHED,"ÏÂÔØÍê³É");
+        reportStatus(allM3U8Duration,-1,STATUS_FINISHED,"ä¸‹è½½å®Œæˆ");
+        decoder.finished();
     }
 
     public void getSegementFromUrl(String url, String postData,String strEncoding) {
         HttpURLConnection con;
         int tryTimes = 0;
-        int bufferLength = 1024*128;
+        int bufferLength = 1024*188;
         long size=0;
         long startTime = System.currentTimeMillis();
         while(tryTimes<2){
             tryTimes++;
             try {
-                URL dataUrl = new URL(URLEncoder.encode(url, "UTF-8"));
-                logger.debug("³¢ÊÔ·ÃÎÊ£º"+url);
+                URL dataUrl = new URL(url);
+                logger.debug("å°è¯•è®¿é—®ï¼š"+url);
                 con = (HttpURLConnection) dataUrl.openConnection();
                 con.setConnectTimeout(2000);
                 con.setReadTimeout(20000);
@@ -168,26 +172,26 @@ public class M3U8Reader extends Thread {
                     errorMsg = "HTTP_UNKNOWN:"+code;
                 }
                 if(code!=HttpURLConnection.HTTP_OK){
-                    logger.error("HTTPÇëÇó·¢Éú´íÎó£º"+code+"," +
+                    logger.error("HTTPè¯·æ±‚å‘ç”Ÿé”™è¯¯ï¼š"+code+"," +
                             errorMsg);
                 }
                 //data = new String(d);
                 con.disconnect();
                 break;
             } catch (Exception ex) {
-                logger.error("ÎŞ·¨Á¬½Ó£º" + url+","+ex.getMessage());
+                logger.error("æ— æ³•è¿æ¥ï¼š" + url+","+ex.getMessage());
                 //ex.printStackTrace();
             }
         }
         long duration = System.currentTimeMillis()-startTime;
         if(duration>30000){
-            logger.warn("´Ë´Î·ÃÎÊÊ±¼ä¹ı³¤£º"+duration+"ms");
+            logger.warn("æ­¤æ¬¡è®¿é—®æ—¶é—´è¿‡é•¿ï¼š"+duration+"ms");
         }
 
         if(duration>0){
             logger.debug("Current Download Bandwidth="
                     + StringUtils.formatBPS(size * 8 * 1000 / duration)+"," +
-                    duration+"ms,"+(size)+"Bytes");
+                    duration+"ms,"+(size)+"Bytes,"+((size%188==0)?"å¯ä»¥å¯¹é½ï¼":"æ— æ³•å¯¹é½ï¼"));
         }
     }
 
@@ -223,6 +227,14 @@ public class M3U8Reader extends Thread {
         if(currentPos>=0){
             status = STATUS_RUNNING;
         }
-        reportStatus(allDuration,currentPos,status,"ÉèÖÃµ±Ç°½øĞĞ½ø¶È");
+        reportStatus(allDuration,currentPos,status,"è®¾ç½®å½“å‰è¿›è¡Œè¿›åº¦");
+    }
+
+    public boolean isLoading() {
+        return loading;
+    }
+
+    public void setLoading(boolean loading) {
+        this.loading = loading;
     }
 }
