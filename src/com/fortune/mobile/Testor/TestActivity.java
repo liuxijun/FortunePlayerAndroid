@@ -24,7 +24,7 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
         MediaPlayer.OnVideoSizeChangedListener,MediaPlayer.OnInfoListener,SurfaceHolder.Callback,
         MediaPlayer.OnTimedTextListener,MediaPlayer.OnSeekCompleteListener {
     protected String TAG = getClass().getSimpleName();
-    MediaPlayer mediaPlayer;
+    MediaPlayer mediaPlayer=null;
     SurfaceView surfaceView;
     SurfaceHolder surfaceHolder;
     View playerContainer;
@@ -55,6 +55,8 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
         myUiHandler = new MyUiHandler(this);
         Button buttonDoPlay = (Button) findViewById(R.id.buttonDoPlay);
         if (buttonDoPlay != null) {
+            //暂时隐藏
+            buttonDoPlay.setVisibility(View.GONE);
             buttonDoPlay.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
@@ -74,9 +76,6 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
     }
 
     public void doTestPlay(){
-        if (mediaPlayer == null) {
-            initPlayer();
-        }
         EditText editTextUrl = (EditText) findViewById(R.id.editTextUrl);
         if (editTextUrl != null) {
             String url = editTextUrl.getText().toString();
@@ -126,6 +125,7 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
 
     public void initPlayer() {
         try {
+            Log.d(TAG,"尝试初始化播放器！");
             mediaPlayer = new MediaPlayer();
             mediaPlayer.setOnVideoSizeChangedListener(this);
             mediaPlayer.setOnBufferingUpdateListener(this);
@@ -220,9 +220,14 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
 
     public void onStop() {
         if (mediaPlayer != null) {
-            mediaPlayer.stop();
+            Log.d(TAG,"尝试停止播放器");
+            if(mediaPlayer.isPlaying()){
+                mediaPlayer.stop();
+            }
+            mediaPlayer.release();
         }
         if(decoder!=null){
+            Log.d(TAG,"尝试停止HlsDecoder");
             decoder.stopDecoder();
         }
         super.onStop();

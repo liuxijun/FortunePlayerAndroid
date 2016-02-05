@@ -10,9 +10,9 @@ import com.fortune.mobile.media.demuxer.TSDemuxer;
 import com.fortune.mobile.media.io.M3U8Reader;
 import com.fortune.mobile.utils.Logger;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Vector;
+import java.util.LinkedList;
+import java.util.Queue;
 
 /**
  * Created by xjliu on 2016/2/2.
@@ -28,7 +28,8 @@ public class HlsDecoder extends BaseDecoder {
     private TSDemuxer demuxer;
     private Logger logger=Logger.getLogger(HlsDecoder.class);
     private MediaCodec mediaCodecVideo=null;
-    Vector<PES> tags=new Vector<PES>();
+    //Vector<PES> tags=new Vector<PES>();
+    Queue<PES> frames = new LinkedList<PES>();
     public HlsDecoder(MediaPlayer mediaPlayer,String url,Surface videoSurface){
         this.mediaPlayer = mediaPlayer;
         this.url = url;
@@ -64,7 +65,7 @@ public class HlsDecoder extends BaseDecoder {
         if(mediaCodecVideo==null){
             logger.error("等待了"+(System.currentTimeMillis()-startTime)+"毫秒，还没有初始化好！");
         }else{
-            logger.error("等待了"+(System.currentTimeMillis()-startTime)+"毫秒，系统初始化完毕！");
+            logger.debug("等待了"+(System.currentTimeMillis()-startTime)+"毫秒，系统初始化完毕！");
         }
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
         ByteBuffer[] inputBuffers;
@@ -74,12 +75,13 @@ public class HlsDecoder extends BaseDecoder {
         long timeoutUs = 1000*1000l;
         if(mediaCodecVideo!=null){
             startTime = System.currentTimeMillis()-1000;
-            long now=0;
+            long now;
             long lastTime = 0;
+            long lastPts = 0;
             long startPts = -1;
             int frameCount = 0;
             while(running){
-                while((tags.size()<=0||!inited)&&running){
+                while((frames.size()<=0||!inited)&&running){
                     try {
                         Thread.sleep(100);
                         logger.debug("数据没有准备好，正在等待数据.....");
@@ -90,12 +92,12 @@ public class HlsDecoder extends BaseDecoder {
                 if(!running){
                     break;
                 }
-                if(tags.size()>0){
+                if(frames.size()>0){
                     if(mediaPlayer!=null&&!mediaPlayer.isPlaying()){
                         mediaPlayer.setIsPlaying(true);
                     }
 
-                    PES pes = tags.remove(0);
+                    PES pes = frames.poll();
                     if(pes==null){
                         continue;
                     }
@@ -108,26 +110,36 @@ public class HlsDecoder extends BaseDecoder {
                         startPts = pes.pts;
                     }
                     now = System.currentTimeMillis();
-                    while(now-startTime<pes.pts-startPts){
-                        try {
-                            now = System.currentTimeMillis();
-                            Thread.sleep(10);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
+                    long diff = pes.pts-lastPts;
+                    try {
+                        if(diff>1000){
+                            logger.error("时间戳异常：pes.pts="+pes.pts+",lastPts="+lastPts+",diff="+diff);
                         }
+                        while((now-startTime<pes.pts-startPts)&&running){
+                            now = System.currentTimeMillis();
+                            sleep(10);
+                        }
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
                     int inputBufferIndex =-1;
                     int times = 0;
-                    while(inputBufferIndex<0&&times<5){
-                        inputBufferIndex = mediaCodecVideo.dequeueInputBuffer(timeoutUs);
+                    while(inputBufferIndex<0&&times<5&&running){
+                        if(mediaCodecVideo!=null){
+                            inputBufferIndex = mediaCodecVideo.dequeueInputBuffer(timeoutUs);
+                        }else{
+                            break;
+                        }
                         times++;
                     }
+ /*
                     logger.debug("加载当前帧，准备解码：pes.pts="+pes.pts+",等待了同步时钟："+(now-lastTime)+
                             "ms,frameCount=" +frameCount+
                             ",pesCount="+pesCount+",inputBufferIndex="+inputBufferIndex);
                     lastTime = now;
+// */
                     frameCount++;
-                    if(inputBufferIndex>=0){
+                    if(inputBufferIndex>=0&&running&&inited){
                         ByteArray data = pes.data;
                         int length = (int)data.getBytesAvailable()-pes.payload;
                         ByteBuffer byteBuffer = inputBuffers[inputBufferIndex];
@@ -135,12 +147,18 @@ public class HlsDecoder extends BaseDecoder {
                         byteBuffer.put(data.getBuffers(), data.getBufferOffset() + pes.payload, length);
                         //inputBuffers[inputBufferIndex].put(data.getBuffers(), data.getBufferOffset() + pes.payload, length);
                         mediaCodecVideo.queueInputBuffer(inputBufferIndex,0,length,pes.pts,0);
+                        lastPts = pes.pts;
                         int outputBufferIndex = mediaCodecVideo.dequeueOutputBuffer(info,0);
-                        if (outputBufferIndex >= 0) {
-                            while (outputBufferIndex >= 0) {
+                        if (outputBufferIndex >= 0&&running&&inited) {
+                            while (outputBufferIndex >= 0 &&running&&inited) {
                                 mediaCodecVideo.releaseOutputBuffer(outputBufferIndex, true);
                                 outputBufferIndex = mediaCodecVideo.dequeueOutputBuffer(info, 0);
                             }
+     /*
+                            logger.debug("加载当前帧完成：pes.pts="+pes.pts+",frameCount=" +frameCount+
+                                    ",pesCount="+pesCount+",inputBufferIndex="+inputBufferIndex);
+                            //lastTime = now;
+//                            */
                         } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
                             outputBuffers = mediaCodecVideo.getOutputBuffers();
                             logger.debug("MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED:outputBuffers.length="+outputBuffers.length);
@@ -150,7 +168,11 @@ public class HlsDecoder extends BaseDecoder {
                             logger.debug("MediaCodec.INFO_OUTPUT_FORMAT_CHANGED:"+format.toString());
                         }
                     }else{
-                        logger.error("inputBufferIndex小于0，无法进行后续的操作！");
+                        if(running){
+                            logger.error("inputBufferIndex小于0，无法进行后续的操作！");
+                        }else{
+                            logger.error("要求退出！");
+                        }
                     }
                 }
 
@@ -160,20 +182,34 @@ public class HlsDecoder extends BaseDecoder {
         if(mediaPlayer!=null){
             mediaPlayer.setIsPlaying(false);
         }
+        inited = false;
         mediaCodecVideo.stop();
         mediaCodecVideo.release();
         mediaCodecVideo = null;
-        inited = false;
     }
 
     int pesCount=0;
     public void onFramesReady(PES pes) {
 //        logger.debug("有PES数据来了，准备解码，pts="+pes.pts+",payload="+pes.payload+",len="+(pes.data.bytesAvailable-pes.payload));
+/*
         if(pesCount%100==0){
             logger.debug("有PES数据来了，准备解码，pts="+pes.pts+",dts="+pes.dts+",payload="+pes.payload+",len="+(pes.data.getBytesAvailable()-pes.payload)+",pesCount="+pesCount);
         }
+*/
         pesCount++;
-        tags.add(pes);
+        int i=0;
+        while(frames.size()>250&&running){
+            try {
+                sleep(100);
+                i++;
+                if(i%10==0){
+                    logger.debug("有PES队列满了，等待1秒,队列长度："+frames.size());
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        frames.offer(pes);
     }
 
     @Override

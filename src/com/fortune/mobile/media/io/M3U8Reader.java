@@ -62,6 +62,7 @@ public class M3U8Reader extends Thread {
         String m3u8Content = messager.postToHost(url,null);
         if(m3u8Content!=null&&!"".equals(m3u8Content.trim())){
             m3u8.addStream(0,1,url,m3u8Content);
+            byte[] buffer = new byte[188*1000];
             for(M3U8Stream stream:m3u8.getStreams()){
                 if(willStop){
                     break;
@@ -72,7 +73,7 @@ public class M3U8Reader extends Thread {
                         break;
                     }
                     String segmentUrl = segment.getUrl();
-                    getSegementFromUrl(segmentUrl, null, null);
+                    getSegementFromUrl(segmentUrl, null, null,buffer);
 /*
                     dataLength+=data.getContentLength();
                     if(rootPath!=null){
@@ -108,7 +109,7 @@ public class M3U8Reader extends Thread {
         decoder.finished();
     }
 
-    public void getSegementFromUrl(String url, String postData,String strEncoding) {
+    public void getSegementFromUrl(String url, String postData,String strEncoding,byte[] d) {
         HttpURLConnection con;
         int tryTimes = 0;
         int bufferLength = 1024*188;
@@ -147,7 +148,6 @@ public class M3U8Reader extends Thread {
                 InputStream is = con.getInputStream();
                 DataInputStream dis = new DataInputStream(is);
                 int code = con.getResponseCode();
-                byte d[] = new byte[bufferLength];
                 while(true){
                     if(willStop){
                         break;
@@ -187,12 +187,13 @@ public class M3U8Reader extends Thread {
         if(duration>30000){
             logger.warn("此次访问时间过长："+duration+"ms");
         }
-
+/*
         if(duration>0){
             logger.debug("Current Download Bandwidth="
                     + StringUtils.formatBPS(size * 8 * 1000 / duration)+"," +
                     duration+"ms,"+(size)+"Bytes,"+((size%188==0)?"可以对齐！":"无法对齐！"));
         }
+*/
     }
 
     private String repairUrl(String url){
