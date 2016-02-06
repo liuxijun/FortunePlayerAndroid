@@ -15,4 +15,6 @@ public interface Decoder {
     void onFramesReady(PES pes);
     void finished();
     void onTsFinished();
+    boolean seekTo(int position);
+    int getDuration();
 }

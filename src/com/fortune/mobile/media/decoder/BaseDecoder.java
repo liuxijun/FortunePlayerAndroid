@@ -46,5 +46,15 @@ public class BaseDecoder extends Thread implements Decoder{
 
     }
 
+    @Override
+    public boolean seekTo(int position) {
+        return false;
+    }
+
+    @Override
+    public int getDuration() {
+        return 0;
+    }
+
 
 }

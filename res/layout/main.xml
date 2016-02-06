@@ -78,7 +78,7 @@
                     android:id="@+id/seekBar"
                     android:layout_centerVertical="true"
                     android:layout_toEndOf="@+id/tvBegin"
-                    android:layout_toStartOf="@+id/tvEnd"/>
+                    android:layout_toStartOf="@+id/tvEnd" android:max="5400000" android:progress="0"/>
         </RelativeLayout>
     </RelativeLayout>
 

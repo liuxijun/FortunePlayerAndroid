@@ -104,16 +104,22 @@ public class TSDemuxer extends Thread {
     public void setStreamFinished(boolean streamFinished) {
         this.streamFinished = streamFinished;
     }
-
-    public static boolean probe(ByteArray data) {
+    public void reset(){
+        logger.debug("重置所有读取数据");
+        setBytesAvailable(0);
+        _data.position = 0;
+        _data.readed = 0;
+    }
+    public boolean probe(ByteArray data) {
         int pos = data.position;
-        int len = Math.min((int) data.readed, 188 * 2);
+        int len = Math.min((int) data.bytesAvailable, 188 * 2);
         for (int i = 0; i < len; i++) {
             if (data.read_8() == SYNCBYTE) {
                 // ensure that at least two consecutive TS start offset are found
                 if (len - data.position > 188) {
                     data.position = pos + i + 188;
                     if (data.read_8() == SYNCBYTE) {
+                        logger.debug("经过反复查找，跳跃了"+i+"个字节，终于找到了0x47");
                         data.position = pos + i;
                         return true;
                     } else {
@@ -122,7 +128,8 @@ public class TSDemuxer extends Thread {
                 }
             }
         }
-        data.position = pos;
+        //todo 这里注释掉的原因是，如果在一段数据流内（2*188个字节）还没有找到起始字符，就让他继续找
+        //data.position = pos;
         return false;
     }
 
@@ -148,25 +155,28 @@ public class TSDemuxer extends Thread {
         _pmtId = _avcId = _audioId = _id3Id = -1;
         _audioIsAAC = false;
         _tags = new Vector<FLVTag>();
-        videoBuffer = new ByteArray(1024 * 1024 * 2);//10 MB buffer for video pes data
-        audioBuffer = new ByteArray(1024 * 1024);//5MB buffer for audio pes data
-        nalBuffer = new ByteArray(1024 * 1024);
-        _data = new ByteArray(1024 * 30 * 188);
+        videoBuffer = new ByteArray(1024 * 512);//10 MB buffer for video pes data
+        audioBuffer = new ByteArray(1024 * 256);//5MB buffer for audio pes data
+        nalBuffer = new ByteArray(1024 * 128);
+        _data = new ByteArray(1024 * 10 * 188);
 //        _displayObject = displayObject;
     }
 
     public void setBytesAvailable(long bytesAvailable) {
-        logger.debug("修改bytesAvailable=" + bytesAvailable);
+//        logger.debug("修改bytesAvailable=" + bytesAvailable);
         synchronized (lock) {
             _data.bytesAvailable = bytesAvailable;
         }
-        logger.debug("修改完毕bytesAvailable=" + bytesAvailable);
+//        logger.debug("修改完毕bytesAvailable=" + bytesAvailable);
     }
 
     /**
      * append new TS data
      */
+    int appendIdx = 0;
+
     public synchronized long append(byte[] buffer, int startPos, int length) {
+        appendIdx++;
         if (_data == null) {
             int defaultLength = 1024 * 1024 * 10;
             logger.debug("firtst run!alloc memory :" + defaultLength + " byte");
@@ -183,7 +193,7 @@ public class TSDemuxer extends Thread {
             while (_dataReward && running) {
                 //数据已经从头来过了，这时候必须等待有人把这个值设置为false
                 try {
-                    logger.debug("已经重置过数据，这时不能再重置了！需要等待.....position=" + _data.position + ",bytesAvailable=" + _data.bytesAvailable + ",readed=" + _data.readed);
+                    logger.debug(" append:"+appendIdx+","+"已经重置过数据，这时不能再重置了！需要等待.....position=" + _data.position + ",bytesAvailable=" + _data.bytesAvailable + ",readed=" + _data.readed);
                     sleep(1000L);
                     i++;
                 } catch (InterruptedException e) {
@@ -192,7 +202,7 @@ public class TSDemuxer extends Thread {
             }
             if (shouldWait) {
                 try {
-                    logger.debug("额外等待1秒钟，让重置的数据先消费起来，position=" + _data.position + ",bytesAvailable=" + _data.bytesAvailable + ",readed=" + _data.readed);
+                    logger.debug(" append:"+appendIdx+","+"额外等待1秒钟，让重置的数据先消费起来，position=" + _data.position + ",bytesAvailable=" + _data.bytesAvailable + ",readed=" + _data.readed);
                     sleep(1000L);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -211,12 +221,12 @@ public class TSDemuxer extends Thread {
                 startPos += tempLength;
                 length -= tempLength;
             }
-            logger.debug("buffer overflow!Refill from header! current length=" + _data.buffers.length +
+            logger.debug(" append:"+appendIdx+","+"buffer overflow!Refill from header! current length=" + _data.buffers.length +
                     ",readed=" + _data.readed + ",will fill length=" + length + ",bytesAvailable=" +
                     _data.bytesAvailable + "," + ((byteLeft == 0) ? "已对齐,无需处理" : ("未对齐，剩余字节" + byteLeft + "bytes")));
             _data.readed = 0;
             _dataReward = true;
-        } else {
+//        } else {
             /**
              * 有几种情况：
              * 1、当前处理的指针小于当前已经填充的位置，可以继续处理
@@ -225,22 +235,25 @@ public class TSDemuxer extends Thread {
              *                  处理指针继续向后处理并超过了要添加的数据长度，或处理指针重头再处理
              *
              */
-            if (_dataReward) {
-                int i=0;
-                while (_data.readed + length >= _data.position && running) {
-                    try {
-                        logger.debug("要填充的数据追上了要处理的数据指针，等待中。 position=" + _data.position + ",readed=" + _data.readed + ",length=" + length+",i="+i);
-                        i++;
-                        sleep(1000);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+        }
+        if (_dataReward) {
+            int i=0;
+            while (_data.readed + length >= _data.position && running&&_dataReward) {
+                try {
+                    logger.debug(" append:"+appendIdx+","+"要填充的数据追上了要处理的数据指针，等待中.....position=" + _data.position+",bytesAvailable="+_data.bytesAvailable + ",readed=" + _data.readed + ",length=" + length+",i="+i);
+                    i++;
+                    sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
-//            logger.debug(""+length);
-            if (!running) {
-                return -1;
+            if(!_dataReward){
+                logger.warn(" append:"+appendIdx+","+"在等待期间，处理指针清零了！这有一定的风险！");
             }
+        }
+//            logger.debug(""+length);
+        if (!running) {
+            return -1;
         }
         int toPos = (int) _data.readed;
         //_data.readed = ByteArray.writeByteArray(_data.buffers, (int) _data.readed, buffer, startPos, length);
@@ -249,10 +262,7 @@ public class TSDemuxer extends Thread {
             _data.readed = toPos + length;
         }
         //logger.debug("buffer appened:_data.position=" + _data.position + ",readed=" + _data.readed);
-        if (_dataReward) {
-
-        } else {
-            //如果已经填充的指针，大于当前可用指针，就重新设置当前可用指针
+        if (!_dataReward) {
             setBytesAvailable(_data.readed);
         }
         return _data.readed;
@@ -302,6 +312,7 @@ public class TSDemuxer extends Thread {
         running = false;
     }
 
+    int parseCount=0;
     public void run() {
         long start_time = getTimer();
         logger.debug("准备启动分离器");
@@ -332,11 +343,11 @@ public class TSDemuxer extends Thread {
                 try {
                     Thread.sleep(40);
                     if (i % 25 == 0) {
-                        logger.debug("数据尚未就绪，等待了" + i + "次，byteLeft=" + byteLeft);
+                        logger.debug("parseTS "+parseCount+","+"数据尚未就绪，等待了" + i + "次，byteLeft=" + byteLeft);
                     }
                     i++;
                     if (i > 250) {
-                        logger.error("超时了！不再等待TS流过来了");
+                        logger.error("parseTS "+parseCount+","+"超时了！不再等待TS流过来了");
                         running = false;
                         break;
                     }
@@ -344,17 +355,17 @@ public class TSDemuxer extends Thread {
                     if (byteLeft < 188) {
                         //数据读取完毕，看看是否需要从头再来
                         if (running && _dataReward) {
-                            logger.debug("数据使用完毕，重头再来一次：position=" + _data.position + ",bytesAvailable="
+                            logger.debug("parseTS "+parseCount+","+"数据使用完毕，重头再来一次：position=" + _data.position + ",bytesAvailable="
                                     + _data.bytesAvailable + ",readed=" + _data.readed + ",byteleft=" + byteLeft);
-                            _data.position = 0;
                             setBytesAvailable(_data.readed);
+                            _data.position = 0;
                             _dataReward = false;
                         } else {
                             if (!_dataReward) {
-                                logger.debug("数据未有效填充，只能是等待！position=" + _data.position + ",bytesAvailable="
+                                logger.debug("parseTS "+parseCount+","+"数据未有效填充，只能是等待！position=" + _data.position + ",bytesAvailable="
                                         + _data.bytesAvailable + ",readed=" + _data.readed);
                             } else {
-                                logger.warn("这是要退出的节奏啊：running=" + running + ",_dataReward=" + _dataReward);
+                                logger.warn("parseTS "+parseCount+","+"这是要退出的节奏啊：running=" + running + ",_dataReward=" + _dataReward);
                             }
                         }
                     } else {
@@ -372,13 +383,14 @@ public class TSDemuxer extends Thread {
                     break;
                 }
             }
-            if (!running || (byteLeft < 188 && streamFinished)) {
+            if ((!running)||(byteLeft < 188 && streamFinished)) {
                 break;
             }
             if (byteLeft == 188) {
-                logger.debug("可能已经到顶了：bytesAvailable=" + _data.bytesAvailable + ",position=" + _data.position + ",readed=" + _data.readed);
+                logger.debug("parseTS "+parseCount+","+"可能已经到顶了：bytesAvailable=" + _data.bytesAvailable + ",position=" + _data.position + ",readed=" + _data.readed);
             }
-            _parseTSPacket();
+            _parseTSPacket(parseCount);
+            parseCount++;
         }
 /*
         int length = videoBuffer.bufferOffset;
@@ -419,21 +431,31 @@ public class TSDemuxer extends Thread {
 
 */
         running = false;
+        _tags.clear();
+        _tags = null;
+        videoBuffer = null;
+        _data = null;
+        _curVideoPES = null;
+        _curAudioPES = null;
+        _curId3PES = null;
+        _curNalUnit = null;
+        _curVideoTag = null;
         logger.debug("_parseTimer finished!");
         decoder.finished();
+        System.gc();
     }
 
     /**
      * flux demux
      **/
     private void _flush() {
-        logger.debug("TS: flushing demux");
+        logger.debug("_flush "+parseCount+","+"TS: flushing demux");
         // check whether last parsed audio PES is complete
         if (_curAudioPES != null && _curAudioPES.buffers.length > 14) {
             PES pes = new PES(_curAudioPES, true);
             // consider that PES with unknown size (length=0 found in header) is complete
             if (pes.len == 0 || (pes.data.getLength() - pes.payload - pes.payload_len) >= 0) {
-                logger.debug("TS: complete Audio PES found at end of segment, parse it");
+                logger.debug("_flush "+parseCount+","+"TS: complete Audio PES found at end of segment, parse it");
                 // complete PES, parse and push into the queue
                 if (_audioIsAAC) {
                     _parseADTSPES(pes);
@@ -442,7 +464,7 @@ public class TSDemuxer extends Thread {
                 }
                 _curAudioPES = null;
             } else {
-                logger.debug("TS: partial audio PES at end of segment");
+                logger.debug("_flush "+parseCount+","+"TS: partial audio PES at end of segment");
                 _curAudioPES.position = _curAudioPES.getLength();
             }
         }
@@ -451,7 +473,7 @@ public class TSDemuxer extends Thread {
             PES pes = new PES(_curVideoPES, false);
             // consider that PES with unknown size (length=0 found in header) is complete
             if (pes.len == 0 || (pes.data.getLength() - pes.payload - pes.payload_len) >= 0) {
-                logger.debug("TS: complete AVC PES found at end of segment, parse it");
+                logger.debug("_flush "+parseCount+","+"TS: complete AVC PES found at end of segment, parse it");
                 // complete PES, parse and push into the queue
                 _parseAVCPES(pes);
                 _curVideoPES = null;
@@ -465,7 +487,7 @@ public class TSDemuxer extends Thread {
                     _curNalUnit = null;
                 }
             } else {
-                logger.debug("TS: partial AVC PES at end of segment expected/current len:" + pes.payload_len + "/"
+                logger.debug("_flush "+parseCount+","+"TS: partial AVC PES at end of segment expected/current len:" + pes.payload_len + "/"
                         + (pes.data.getLength() - pes.payload));
                 _curVideoPES.position = (int) _curVideoPES.bytesAvailable;
             }
@@ -474,12 +496,12 @@ public class TSDemuxer extends Thread {
         if (_curId3PES != null && _curId3PES.getLength() > 14) {
             PES pes3 = new PES(_curId3PES, false);
             if (pes3.len > 0 && (pes3.data.getLength() - pes3.payload - pes3.payload_len) >= 0) {
-                logger.warn("TS: complete ID3 PES found at end of segment, parse it");
+                logger.warn("_flush "+parseCount+","+"TS: complete ID3 PES found at end of segment, parse it");
                 // complete PES, parse and push into the queue
                 _parseID3PES(pes3);
                 _curId3PES = null;
             } else {
-                logger.debug("TS: partial ID3 PES at end of segment");
+                logger.debug("_flush "+parseCount+","+"TS: partial ID3 PES at end of segment");
                 _curId3PES.position = _curId3PES.getLength();
             }
         }
@@ -501,7 +523,7 @@ public class TSDemuxer extends Thread {
         if (_adtsFrameOverflow != null && _adtsFrameOverflow.getLength() > 0) {
             // if overflowing, append remaining data from previous frame at the beginning of PES packet
             {
-                logger.debug("TS/AAC: append overflowing " + _adtsFrameOverflow.getLength() + " bytes to beginning of new PES packet");
+                logger.debug("_parseADTSPES "+parseCount+","+"TS/AAC: append overflowing " + _adtsFrameOverflow.getLength() + " bytes to beginning of new PES packet");
             }
             ByteArray ba = new ByteArray(pes.payload + _adtsFrameOverflow.position);
             ba.writeBytes(_adtsFrameOverflow);
@@ -512,7 +534,7 @@ public class TSDemuxer extends Thread {
         }
         if (isNaN(pes.pts)) {
             {
-                logger.warn("TS/AAC: no PTS info in this PES packet,discarding it");
+                logger.warn("_parseADTSPES "+parseCount+","+"TS/AAC: no PTS info in this PES packet,discarding it");
             }
             return;
         }
@@ -521,7 +543,7 @@ public class TSDemuxer extends Thread {
             FLVTag adifTag = new FLVTag(FLVTag.AAC_HEADER, pes.pts, pes.dts, true);
             ByteArray adif = AACDemuxer.getADIF(pes.data, pes.payload);
             {
-                logger.debug("TS/AAC: insert ADIF TAG");
+                logger.debug("_parseADTSPES "+parseCount+","+"TS/AAC: insert ADIF TAG");
             }
             adifTag.push(adif, 0, adif.getLength());
             _tags.add(adifTag);
@@ -545,7 +567,7 @@ public class TSDemuxer extends Thread {
                 _adtsFrameOverflow = new ByteArray(audioBuffer, pes.data.bufferOffset + frame.start + frame.length);
                 //_adtsFrameOverflow.writeBytes(pes.data, frame.start + frame.length);
                 {
-                    logger.debug("TS/AAC:ADTS frame overflow:" + adts_overflow);
+                    logger.debug("_parseADTSPES "+parseCount+","+"TS/AAC:ADTS frame overflow:" + adts_overflow);
                 }
             }
         } else {
@@ -553,7 +575,7 @@ public class TSDemuxer extends Thread {
             _adtsFrameOverflow = new ByteArray(pes.data.buffers, pes.data.bufferOffset + pes.data.position);
             //_adtsFrameOverflow.writeBytes(pes.data, pes.data.position);
             {
-                logger.debug("TS/AAC:ADTS frame overflow:" + _adtsFrameOverflow.getLength());
+                logger.debug("_parseADTSPES "+parseCount+","+"TS/AAC:ADTS frame overflow:" + _adtsFrameOverflow.getLength());
             }
         }
     }
@@ -566,7 +588,7 @@ public class TSDemuxer extends Thread {
     private void _parseMPEGPES(PES pes) {
         if (isNaN(pes.pts)) {
             {
-                logger.warn("TS/MP3: no PTS info in this MP3 PES packet,discarding it");
+                logger.warn("_parseMPEGPES "+parseCount+","+"TS/MP3: no PTS info in this MP3 PES packet,discarding it");
             }
             return;
         }
@@ -592,7 +614,7 @@ public class TSDemuxer extends Thread {
                 _curNalUnit.writeBytes(pes.data, pes.payload, pes.data.getLength() - pes.payload);
             } else {
                 {
-                    logger.warn("TS: no NAL unit found in first (?) video PES packet, discarding data. possible segmentation issue ?");
+                    logger.warn("_parseAVCPES "+parseCount+","+"TS: no NAL unit found in first (?) video PES packet, discarding data. possible segmentation issue ?");
                 }
             }
             return;
@@ -604,7 +626,7 @@ public class TSDemuxer extends Thread {
         }
         if (isNaN(pes.pts)) {
             {
-                logger.warn("TS: no PTS info in this AVC PES packet,discarding it");
+                logger.warn("_parseAVCPES "+parseCount+","+"TS: no PTS info in this AVC PES packet,discarding it");
             }
             return;
         }
@@ -645,7 +667,7 @@ public class TSDemuxer extends Thread {
                     // notify upper layer todo
                     _callback_videometadata(spsInfo.width, spsInfo.height);
                 } else {
-                    logger.warn("Can't found movie width and height!");
+                    logger.warn("_parseAVCPES "+parseCount+","+"Can't found movie width and height!");
                 }
             } else if (frame.type == 8) {
                 if (!pps_found) {
@@ -758,7 +780,7 @@ public class TSDemuxer extends Thread {
         // note: apple spec does not include having PTS in ID3!!!!
         // so we should really spoof the PTS by knowing the PCR at this point
         if (isNaN(pes.pts)) {
-            logger.warn("TS: no PTS info in this ID3 PES packet,discarding it");
+            logger.warn("_parseID3PES "+parseCount+","+"TS: no PTS info in this ID3 PES packet,discarding it");
             return;
         }
 
@@ -793,7 +815,7 @@ public class TSDemuxer extends Thread {
      **/
     long totalVideoLength = 0;
 
-    private void _parseTSPacket() {
+    private void _parseTSPacket(int parseCount) {
         // Each packet is 188 bytes.
         int todo = TSDemuxer.PACKETSIZE;
         // Sync byte.
@@ -802,15 +824,16 @@ public class TSDemuxer extends Thread {
             if (probe(_data)) {
                 int pos_end = _data.position;
                 {
-                    logger.warn("TS: lost sync between offsets:" + pos_start + "/" + pos_end);
+                    logger.warn("_parseTSPacket "+parseCount+","+"TS: lost sync between offsets:" + pos_start + "/" + pos_end);
 //                    ByteArray ba = new ByteArray(_datapos_end - pos_start);
 //                    _data.position = pos_start;
 //                    _data.readBytes(ba, 0, pos_end - pos_start);
-                    logger.debug("TS: lost sync dump:\n" + bufferToHex(_data.buffers, pos_start, pos_end - pos_start));
+                    logger.debug("_parseTSPacket "+parseCount+","+"TS: lost sync dump:\n" + bufferToHex(_data.buffers, pos_start, pos_end - pos_start));
                 }
                 _data.position = pos_end + 1;
             } else {
-                throw new Error("TS: Could not parse file: sync byte not found @ offset/len " + _data.position + "/" + _data.readed);
+                logger.error("_parseTSPacket " + parseCount + "," + "TS: Could not parse file: sync byte not found @ offset/len " + pos_start + "/" + (_data.position-pos_start));
+                return;
             }
         }
         todo--;
@@ -848,13 +871,13 @@ public class TSDemuxer extends Thread {
             todo -= _parsePAT(stt);
             if (!_pmtParsed) {
                 {
-                    logger.debug("TS: PAT found.PMT PID:" + _pmtId);
+                    logger.debug("_parseTSPacket " + parseCount + "," +"TS: PAT found.PMT PID:" + _pmtId);
                 }
             }
         } else if (pid == _pmtId) {
             if (!_pmtParsed) {
                 {
-                    logger.debug("TS: PMT found");
+                    logger.debug("_parseTSPacket " + parseCount + "," +"TS: PMT found");
                 }
                 todo -= _parsePMT(stt);
                 _pmtParsed = true;
@@ -863,7 +886,7 @@ public class TSDemuxer extends Thread {
                 // in theory there should be no A/V packets before PAT/PMT)
                 if (_packetsBeforePMT) {
                     {
-                        logger.warn("TS: late PMT found, rewinding at beginning of TS");
+                        logger.warn("_parseTSPacket " + parseCount + "," +"TS: late PMT found, rewinding at beginning of TS");
                     }
                     _data.position = 0;
                     return;
@@ -876,7 +899,7 @@ public class TSDemuxer extends Thread {
                     if (null != _curAudioPES) {
                         _curAudioOffset = _curAudioPES.bufferOffset + _curAudioPES.position;
                         if (_curAudioOffset >= audioBuffer.buffers.length - 128 * 1024) {
-                            logger.debug("audioBuffer reward!");
+                            logger.debug("_parseTSPacket " + parseCount + "," +"AudioBuffer reward!");
                             _curAudioOffset = 0;
                         }
                         if (_audioIsAAC) {
@@ -891,7 +914,7 @@ public class TSDemuxer extends Thread {
                     _curAudioPES.writeBytes(_data, _data.position, todo);
                 } else {
                     {
-                        logger.warn("TS: Discarding audio packet with id " + pid);
+                        logger.warn("_parseTSPacket " + parseCount + "," +"TS: Discarding audio packet with id " + pid);
                     }
                 }
             }
@@ -912,21 +935,21 @@ public class TSDemuxer extends Thread {
                     PES pes = new PES(_curId3PES, false);
                     if (pes.len != 0 && (pes.data.getLength() - pes.payload - pes.payload_len) >= 0) {
                         {
-                            logger.debug("TS: complete ID3 PES found, parse it");
+                            logger.debug("_parseTSPacket " + parseCount + "," +"TS: complete ID3 PES found, parse it");
                         }
                         // complete PES, parse and push into the queue
                         _parseID3PES(pes);
                         _curId3PES = null;
                     } else {
                         {
-                            logger.debug("TS: partial ID3 PES");
+                            logger.debug("_parseTSPacket " + parseCount + "," +"TS: partial ID3 PES");
                         }
                         _curId3PES.position = _curId3PES.getLength();
                     }
                 } else {
                     // just to avoid compilation warnings if is false
                     {
-                        logger.warn("TS: Discarding ID3 packet with id " + pid + " bad TS segmentation ?");
+                        logger.warn("_parseTSPacket " + parseCount + "," +"TS: Discarding ID3 packet with id " + pid + " bad TS segmentation ?");
                     }
                 }
             }
@@ -939,7 +962,7 @@ public class TSDemuxer extends Thread {
                         totalVideoLength += _curVideoPES.bytesAvailable;
                         _curVideoBufferPos = _curVideoPES.bufferOffset + (int) _curVideoPES.bytesAvailable;
                         if (_curVideoBufferPos >= videoBuffer.buffers.length - 128 * 1024) {
-                            logger.debug("缓冲区满了！" + _curVideoBufferPos + ",_data.position=" + _data.position);
+                            logger.debug("_parseTSPacket " + parseCount + "," +"缓冲区满了！" + _curVideoBufferPos + ",_data.position=" + _data.position);
                             _curVideoBufferPos = 0;
                         }
                         try {
@@ -955,7 +978,7 @@ public class TSDemuxer extends Thread {
                             _parseAVCPES(new PES(_curVideoPES, false));
                             //logger.debug("videoPES:_curVideoPES.bufferOffset="+_curVideoPES.bufferOffset+",bytesAvailable="+_curVideoPES.bytesAvailable+",_data.position="+_data.position);
                         } catch (Exception e) {
-                            logger.error("To process AVCPES failed:current size " + _curVideoPES.position + " bytes,position=" +
+                            logger.error("_parseTSPacket " + parseCount + "," +"To process AVCPES failed:current size " + _curVideoPES.position + " bytes,position=" +
                                     _curVideoPES.bufferOffset + "(0x" +
                                     String.format("%X", _curVideoPES.bufferOffset) + "),packetNo=" + (_curVideoPES.bufferOffset + 187) / 188
                                     + "," + String.format("prefix=0x%X%X%X%X", _curVideoPES.buffers[0], _curVideoPES.buffers[1],
@@ -979,7 +1002,7 @@ public class TSDemuxer extends Thread {
                     //logger.debug("_curVideoPES.buffer=\n"+bufferToHex(_curVideoPES.buffers,_curVideoPES.bufferOffset,32));
                 } else {
                     {
-                        logger.warn("TS: Discarding video packet with id " + pid + " bad TS segmentation ?");
+                        logger.warn("_parseTSPacket " + parseCount + "," +"TS: Discarding video packet with id " + pid + " bad TS segmentation ?");
                     }
                 }
             }
@@ -1010,7 +1033,7 @@ public class TSDemuxer extends Thread {
         int sectionLen = _data.readUnsignedShort() & 0x3FF;
         // Check the section length for a single PMT.
         if (sectionLen > 13) {
-            throw new Error("TS: Multiple PMT entries are not supported.");
+            throw new Error("_parsePAT " + parseCount + "," +"TS: Multiple PMT entries are not supported.");
         }
         // Grab the PMT ID.
         _data.position += 7;
@@ -1052,22 +1075,22 @@ public class TSDemuxer extends Thread {
             int sid = _data.readUnsignedShort() & 0x1fff;
             if (typ == 0x0F) {
                 // ISO/IEC 13818-7 ADTS AAC (MPEG-2 lower bit-rate audio)
-                audioList.add(new AudioTrack("TS/AAC " + audioList.size(), AudioTrack.FROM_DEMUX, sid, (audioList.size() == 0), true));
+                audioList.add(new AudioTrack("_parsePMT " + parseCount + "," +"TS/AAC " + audioList.size(), AudioTrack.FROM_DEMUX, sid, (audioList.size() == 0), true));
             } else if (typ == 0x1B) {
                 // ITU-T Rec. H.264 and ISO/IEC 14496-10 (lower bit-rate video)
                 _avcId = sid;
                 {
-                    logger.debug("TS: Selected video PID: " + _avcId);
+                    logger.debug("_parsePMT " + parseCount + "," +"TS: Selected video PID: " + _avcId);
                 }
             } else if (typ == 0x03 || typ == 0x04) {
                 // ISO/IEC 11172-3 (MPEG-1 audio)
                 // or ISO/IEC 13818-3 (MPEG-2 halved sample rate audio)
-                audioList.add(new AudioTrack("TS/MP3 " + audioList.size(), AudioTrack.FROM_DEMUX, sid, (audioList.size() == 0), false));
+                audioList.add(new AudioTrack("_parsePMT " + parseCount + "," +"TS/MP3 " + audioList.size(), AudioTrack.FROM_DEMUX, sid, (audioList.size() == 0), false));
             } else if (typ == 0x15) {
                 // ID3 pid
                 _id3Id = sid;
                 {
-                    logger.debug("TS: Selected ID3 PID: " + _id3Id);
+                    logger.debug("_parsePMT " + parseCount + "," +"TS: Selected ID3 PID: " + _id3Id);
                 }
             }
             // es_info_length
@@ -1079,7 +1102,7 @@ public class TSDemuxer extends Thread {
 
         if (audioList.size() != 0) {
             {
-                logger.debug("TS: Found " + audioList.size() + " audio tracks");
+                logger.debug("_parsePMT " + parseCount + "," +"TS: Found " + audioList.size() + " audio tracks");
             }
         }
         // provide audio track List to audio select callback. this callback will return the selected audio track
@@ -1089,12 +1112,12 @@ public class TSDemuxer extends Thread {
             audioPID = audioTrack.id;
             _audioIsAAC = audioTrack.isAAC;
             {
-                logger.debug("TS: selected " + (_audioIsAAC ? "AAC" : "MP3") + " PID: " + audioPID);
+                logger.debug("_parsePMT " + parseCount + "," +"TS: selected " + (_audioIsAAC ? "AAC" : "MP3") + " PID: " + audioPID);
             }
         } else {
             audioPID = -1;
             {
-                logger.debug("TS: no audio selected");
+                logger.debug("_parsePMT " + parseCount + "," +"TS: no audio selected");
             }
         }
         // in case audio PID change, flush any partially parsed audio PES packet
@@ -1170,11 +1193,11 @@ public class TSDemuxer extends Thread {
             }
             Vector<FLVTag.TagData> pointers = tag.pointers;
         }
-        logger.debug("TS:videoTagCount=" + videoTagCount + ",audioTagCount=" + audioTagCount + ",unknownTagCount=" + unknownTagCount);
+        logger.debug("_callback_progress " + parseCount + "," +"TS:videoTagCount=" + videoTagCount + ",audioTagCount=" + audioTagCount + ",unknownTagCount=" + unknownTagCount);
     }
 
     private void _callback_complete() {
-        logger.debug("TS:complete!");
+        logger.debug("_callback_complete " + parseCount + "," +"TS:complete!");
         decoder.finished();
     }
 
@@ -1182,7 +1205,7 @@ public class TSDemuxer extends Thread {
     int height = -1;
 
     private void _callback_videometadata(int width, int height) {
-        logger.debug("TS:videoMetadata:" + width + "x" + height);
+        logger.debug("_callback_videometadata " + parseCount + "," +"TS:videoMetadata:" + width + "x" + height);
         if (this.width != width || this.height != height) {
             this.width = width;
             this.height = height;

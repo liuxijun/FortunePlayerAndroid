@@ -10,6 +10,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Created by xjliu on 2014/10/12.
@@ -24,6 +25,7 @@ public class M3U8Reader extends Thread {
     public static final int STATUS_RUNNING=2;
     public static final int STATUS_IO_ERROR=-1;
     private boolean loading=true;
+    private M3U8Stream currentStream=null;
 
     public M3U8Reader(Decoder decoder,String url){
         this.url = url;
@@ -39,7 +41,10 @@ public class M3U8Reader extends Thread {
         return logs;
     }
     public long getDuration(){
-        return stopTime.getTime()-startTime.getTime();
+        if(currentStream!=null&&!currentStream.isLive()){
+            return Math.round(currentStream.getAllDuration());
+        }
+        return 0;
     }
 
     public void afterFinished() {
@@ -64,11 +69,20 @@ public class M3U8Reader extends Thread {
             m3u8.addStream(0,1,url,m3u8Content);
             byte[] buffer = new byte[188*1000];
             for(M3U8Stream stream:m3u8.getStreams()){
+                if(currentStream==null){
+                    currentStream = stream;
+                }
                 if(willStop){
                     break;
                 }
                 allM3U8Duration = stream.getAllDuration();
-                for(M3U8Segment segment:stream.getSegments()){
+                List<M3U8Segment> segments = stream.getSegments();
+                for(int i=0,l=segments.size();i<l;i++){
+                    if(willSeekTo>=0){
+                        i = willSeekTo;
+                        seeking = false;
+                    }
+                    M3U8Segment segment = segments.get(i);
                     if(willStop){
                         break;
                     }
@@ -115,7 +129,7 @@ public class M3U8Reader extends Thread {
         int bufferLength = 1024*188;
         long size=0;
         long startTime = System.currentTimeMillis();
-        while(tryTimes<2){
+        while(tryTimes<5&&!willStop){
             tryTimes++;
             try {
                 URL dataUrl = new URL(url);
@@ -148,8 +162,8 @@ public class M3U8Reader extends Thread {
                 InputStream is = con.getInputStream();
                 DataInputStream dis = new DataInputStream(is);
                 int code = con.getResponseCode();
-                while(true){
-                    if(willStop){
+                while(!willStop){
+                    if(seeking){
                         break;
                     }
                     int i= dis.read(d);
@@ -187,13 +201,11 @@ public class M3U8Reader extends Thread {
         if(duration>30000){
             logger.warn("此次访问时间过长："+duration+"ms");
         }
-/*
-        if(duration>0){
+        if(duration>0&&size%188!=0){
             logger.debug("Current Download Bandwidth="
                     + StringUtils.formatBPS(size * 8 * 1000 / duration)+"," +
                     duration+"ms,"+(size)+"Bytes,"+((size%188==0)?"可以对齐！":"无法对齐！"));
         }
-*/
     }
 
     private String repairUrl(String url){
@@ -237,5 +249,32 @@ public class M3U8Reader extends Thread {
 
     public void setLoading(boolean loading) {
         this.loading = loading;
+    }
+
+    public boolean seekable() {
+        return currentStream!=null&&!currentStream.isLive();
+    }
+    public int seekTo(int pos){
+        if(!currentStream.isLive()){
+            List<M3U8Segment> segments = currentStream.getSegments();
+            float currentPos = 0.0f;
+            for(int i=0,l=segments.size();i<l;i++){
+                M3U8Segment segment = segments.get(i);
+                currentPos += segment.getDuration();
+                if(currentPos>pos/1000){
+                    logger.debug("准备跳转到"+i+"个segment,起始时间是："+(currentPos-segment.getDuration())+",时长："+segment.getDuration());
+                    setSeekTo(i);
+                    return i;
+                }
+            }
+            logger.warn("未发现可以调转的时间段，最大时间："+currentPos+",要跳转的时间："+pos/1000);
+        }
+        return -1;
+    }
+    boolean seeking = false;
+    int willSeekTo= -1;
+    public void setSeekTo(int idx){
+        seeking = true;
+        willSeekTo = idx;
     }
 }

@@ -112,13 +112,15 @@ public class HlsDecoder extends BaseDecoder {
                     now = System.currentTimeMillis();
                     long diff = pes.pts-lastPts;
                     try {
-                        if(diff>1000){
+                        if(Math.abs(diff)>100){
                             logger.error("时间戳异常：pes.pts="+pes.pts+",lastPts="+lastPts+",diff="+diff);
+                            diff = 100;
                         }
-                        while((now-startTime<pes.pts-startPts)&&running){
+                        while((now-lastTime<diff)&&running){
                             now = System.currentTimeMillis();
                             sleep(10);
                         }
+                        lastTime = now;
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -186,6 +188,8 @@ public class HlsDecoder extends BaseDecoder {
         mediaCodecVideo.stop();
         mediaCodecVideo.release();
         mediaCodecVideo = null;
+        frames.clear();
+        frames = null;
     }
 
     int pesCount=0;
@@ -196,9 +200,13 @@ public class HlsDecoder extends BaseDecoder {
             logger.debug("有PES数据来了，准备解码，pts="+pes.pts+",dts="+pes.dts+",payload="+pes.payload+",len="+(pes.data.getBytesAvailable()-pes.payload)+",pesCount="+pesCount);
         }
 */
+        if(seeking){
+            logger.warn("正在跳转，暂时不处理数据");
+            return;
+        }
         pesCount++;
         int i=0;
-        while(frames.size()>250&&running){
+        while(running&&frames!=null&&frames.size()>25){
             try {
                 sleep(100);
                 i++;
@@ -209,12 +217,34 @@ public class HlsDecoder extends BaseDecoder {
                 e.printStackTrace();
             }
         }
-        frames.offer(pes);
+        if(running&&frames!=null){
+            frames.offer(pes);
+        }
     }
 
     @Override
     public void onTsFinished() {
 
+    }
+    boolean seeking = false;
+    @Override
+    public boolean seekTo(int position) {
+        if(reader.seekable()){
+            logger.debug("准备跳转到"+position);
+            seeking = true;
+            frames.clear();
+            reader.seekTo(position);
+            demuxer.reset();
+            return true;
+        }else{
+            logger.warn("可能是直播，不能进行跳转："+url);
+        }
+        return false;
+    }
+
+    @Override
+    public int getDuration() {
+        return (int) reader.getDuration();
     }
 
     int width=-1,height=-1;
@@ -266,6 +296,10 @@ public class HlsDecoder extends BaseDecoder {
     }
 
     public long appendBuffer(byte[] buffer,int startPos,int length){
+        if(seeking){
+            demuxer.reset();
+            seeking = false;
+        }
         return demuxer.append(buffer,startPos,length);
     }
 

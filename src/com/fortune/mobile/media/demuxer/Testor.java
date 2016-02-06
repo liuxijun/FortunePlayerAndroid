@@ -116,4 +116,14 @@ public class Testor extends Thread implements Decoder {
     @Override
     public void onTsFinished() {
     }
+
+    @Override
+    public boolean seekTo(int position) {
+        return false;
+    }
+
+    @Override
+    public int getDuration() {
+        return 0;
+    }
 }

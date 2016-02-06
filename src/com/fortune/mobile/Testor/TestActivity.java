@@ -448,7 +448,13 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
         public void onStopTrackingTouch(SeekBar seekBar) {
             int position = seekBar.getProgress();
             if(mediaPlayer!=null){
+                Log.d(TAG,"播放器不为空，跳转播放器到"+position+"播放！");
                 mediaPlayer.seekTo(position);
+            }else if(decoder!=null){
+                Log.d(TAG,"decoder不为空，跳转decoder到"+position+"播放！");
+                decoder.seekTo(position);
+            }else{
+                Log.w(TAG,"无法跳转，没有播放器或者decoder,位置是："+position);
             }
         }
     };
