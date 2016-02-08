@@ -106,9 +106,12 @@ public class TSDemuxer extends Thread {
     }
     public void reset(){
         logger.debug("重置所有读取数据");
-        setBytesAvailable(0);
-        _data.position = 0;
-        _data.readed = 0;
+        synchronized (lock){
+            _data.bytesAvailable = 0;
+            _dataReward = false;
+            _data.position = 0;
+            _data.readed = 0;
+        }
     }
     public boolean probe(ByteArray data) {
         int pos = data.position;
@@ -155,10 +158,10 @@ public class TSDemuxer extends Thread {
         _pmtId = _avcId = _audioId = _id3Id = -1;
         _audioIsAAC = false;
         _tags = new Vector<FLVTag>();
-        videoBuffer = new ByteArray(1024 * 512);//10 MB buffer for video pes data
+        videoBuffer = new ByteArray(1024 * 1024*5);//10 MB buffer for video pes data
         audioBuffer = new ByteArray(1024 * 256);//5MB buffer for audio pes data
         nalBuffer = new ByteArray(1024 * 128);
-        _data = new ByteArray(1024 * 10 * 188);
+        _data = new ByteArray(1024 * 50 * 188);
 //        _displayObject = displayObject;
     }
 
@@ -260,11 +263,11 @@ public class TSDemuxer extends Thread {
         if (length > 0) {
             System.arraycopy(buffer, startPos, _data.buffers, toPos, length);
             _data.readed = toPos + length;
+            if (!_dataReward) {
+                setBytesAvailable(_data.readed);
+            }
         }
         //logger.debug("buffer appened:_data.position=" + _data.position + ",readed=" + _data.readed);
-        if (!_dataReward) {
-            setBytesAvailable(_data.readed);
-        }
         return _data.readed;
     }
 
@@ -276,7 +279,11 @@ public class TSDemuxer extends Thread {
      * cancel demux operation
      */
     public void cancel() {
-        _data = null;
+        if(_data!=null){
+            _data.bytesAvailable = 0;
+            _data.position = 0;
+            _data.readed = 0;
+        }
         _curAudioPES = null;
         _curVideoPES = null;
         _curId3PES = null;
@@ -284,7 +291,12 @@ public class TSDemuxer extends Thread {
         _curNalUnit = null;
         _adtsFrameOverflow = null;
         _avcc = null;
+        _dataReward = false;
+        if(_tags!=null){
+            _tags.clear();
+        }
         _tags = new Vector<FLVTag>();
+        System.gc();
         // _displayObject.removeEventListener(Event.ENTER_FRAME, _parseTimer);
     }
 
@@ -443,75 +455,6 @@ public class TSDemuxer extends Thread {
         logger.debug("_parseTimer finished!");
         decoder.finished();
         System.gc();
-    }
-
-    /**
-     * flux demux
-     **/
-    private void _flush() {
-        logger.debug("_flush "+parseCount+","+"TS: flushing demux");
-        // check whether last parsed audio PES is complete
-        if (_curAudioPES != null && _curAudioPES.buffers.length > 14) {
-            PES pes = new PES(_curAudioPES, true);
-            // consider that PES with unknown size (length=0 found in header) is complete
-            if (pes.len == 0 || (pes.data.getLength() - pes.payload - pes.payload_len) >= 0) {
-                logger.debug("_flush "+parseCount+","+"TS: complete Audio PES found at end of segment, parse it");
-                // complete PES, parse and push into the queue
-                if (_audioIsAAC) {
-                    _parseADTSPES(pes);
-                } else {
-                    _parseMPEGPES(pes);
-                }
-                _curAudioPES = null;
-            } else {
-                logger.debug("_flush "+parseCount+","+"TS: partial audio PES at end of segment");
-                _curAudioPES.position = _curAudioPES.getLength();
-            }
-        }
-        // check whether last parsed video PES is complete
-        if (_curVideoPES != null && _curVideoPES.getLength() > 14) {
-            PES pes = new PES(_curVideoPES, false);
-            // consider that PES with unknown size (length=0 found in header) is complete
-            if (pes.len == 0 || (pes.data.getLength() - pes.payload - pes.payload_len) >= 0) {
-                logger.debug("_flush "+parseCount+","+"TS: complete AVC PES found at end of segment, parse it");
-                // complete PES, parse and push into the queue
-                _parseAVCPES(pes);
-                _curVideoPES = null;
-                // push last video tag if any
-                if (_curVideoTag != null) {
-                    if (_curNalUnit != null && _curNalUnit.getLength() > 0) {
-                        _curVideoTag.push(_curNalUnit, 0, _curNalUnit.getLength());
-                    }
-                    _tags.add(_curVideoTag);
-                    _curVideoTag = null;
-                    _curNalUnit = null;
-                }
-            } else {
-                logger.debug("_flush "+parseCount+","+"TS: partial AVC PES at end of segment expected/current len:" + pes.payload_len + "/"
-                        + (pes.data.getLength() - pes.payload));
-                _curVideoPES.position = (int) _curVideoPES.bytesAvailable;
-            }
-        }
-        // check whether last parsed ID3 PES is complete
-        if (_curId3PES != null && _curId3PES.getLength() > 14) {
-            PES pes3 = new PES(_curId3PES, false);
-            if (pes3.len > 0 && (pes3.data.getLength() - pes3.payload - pes3.payload_len) >= 0) {
-                logger.warn("_flush "+parseCount+","+"TS: complete ID3 PES found at end of segment, parse it");
-                // complete PES, parse and push into the queue
-                _parseID3PES(pes3);
-                _curId3PES = null;
-            } else {
-                logger.debug("_flush "+parseCount+","+"TS: partial ID3 PES at end of segment");
-                _curId3PES.position = _curId3PES.getLength();
-            }
-        }
-        // push remaining tags and notify complete
-        if (_tags.size() > 0) {
-            logger.warn("TS: flush " + _tags.size() + " tags");
-            _callback_progress(_tags);
-            _tags = new Vector<FLVTag>();
-        }
-        logger.debug("TS: parsing complete");
     }
 
     /**
@@ -903,9 +846,17 @@ public class TSDemuxer extends Thread {
                             _curAudioOffset = 0;
                         }
                         if (_audioIsAAC) {
-                            _parseADTSPES(new PES(_curAudioPES, true));
+                            try {
+                                _parseADTSPES(new PES(_curAudioPES, true));
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
                         } else {
-                            _parseMPEGPES(new PES(_curAudioPES, true));
+                            try {
+                                _parseMPEGPES(new PES(_curAudioPES, true));
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
                         }
                     }
                     _curAudioPES = new ByteArray(audioBuffer, _curAudioOffset);
@@ -925,26 +876,34 @@ public class TSDemuxer extends Thread {
                 if (0 != stt) {
                     if (null != _curId3PES) {
                         _curAudioOffset = _curId3PES.bufferOffset + _curId3PES.position;
-                        _parseID3PES(new PES(_curId3PES, false));
+                        try {
+                            _parseID3PES(new PES(_curId3PES, false));
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     }
                     _curId3PES = new ByteArray(audioBuffer, _curAudioOffset);
                 }
                 if (null != _curId3PES) {
                     // store data.  will normally be in a single TS
                     _curId3PES.writeBytes(_data, _data.position, todo);
-                    PES pes = new PES(_curId3PES, false);
-                    if (pes.len != 0 && (pes.data.getLength() - pes.payload - pes.payload_len) >= 0) {
-                        {
-                            logger.debug("_parseTSPacket " + parseCount + "," +"TS: complete ID3 PES found, parse it");
+                    try {
+                        PES pes = new PES(_curId3PES, false);
+                        if (pes.len != 0 && (pes.data.getLength() - pes.payload - pes.payload_len) >= 0) {
+                            {
+                                logger.debug("_parseTSPacket " + parseCount + "," +"TS: complete ID3 PES found, parse it");
+                            }
+                            // complete PES, parse and push into the queue
+                            _parseID3PES(pes);
+                            _curId3PES = null;
+                        } else {
+                            {
+                                logger.debug("_parseTSPacket " + parseCount + "," +"TS: partial ID3 PES");
+                            }
+                            _curId3PES.position = _curId3PES.getLength();
                         }
-                        // complete PES, parse and push into the queue
-                        _parseID3PES(pes);
-                        _curId3PES = null;
-                    } else {
-                        {
-                            logger.debug("_parseTSPacket " + parseCount + "," +"TS: partial ID3 PES");
-                        }
-                        _curId3PES.position = _curId3PES.getLength();
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 } else {
                     // just to avoid compilation warnings if is false

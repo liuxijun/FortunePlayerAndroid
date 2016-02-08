@@ -36,6 +36,7 @@ public class HlsDecoder extends BaseDecoder {
         this.videoSurface = videoSurface;
         reader = new M3U8Reader(this,url);
         demuxer = new TSDemuxer(this);
+        //onVideoSizeChanged(1280,720);
     }
     public void init(){
     }
@@ -47,14 +48,14 @@ public class HlsDecoder extends BaseDecoder {
         demuxer.start();
         int i=0;
         long startTime = System.currentTimeMillis();
-        while(!inited){
+        while(running&&!inited){
             try {
                 Thread.sleep(100);
                 i++;
                 if(0==i%20){
                     logger.debug("正在等待初始化解码器》。。。。");
                 }
-                if(i>=100){
+                if(i>=300){
                     logger.error("超时了！等待了"+(System.currentTimeMillis()-startTime)+"毫秒，还没有初始化好！");
                     break;
                 }
@@ -68,16 +69,16 @@ public class HlsDecoder extends BaseDecoder {
             logger.debug("等待了"+(System.currentTimeMillis()-startTime)+"毫秒，系统初始化完毕！");
         }
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-        ByteBuffer[] inputBuffers;
-        ByteBuffer[] outputBuffers;
-        inputBuffers = mediaCodecVideo.getInputBuffers();
-        //outputBuffers = mediaCodecVideo.getOutputBuffers();
         long timeoutUs = 1000*1000l;
         if(mediaCodecVideo!=null){
+            ByteBuffer[] inputBuffers;
+            ByteBuffer[] outputBuffers;
+            inputBuffers = mediaCodecVideo.getInputBuffers();
+            //outputBuffers = mediaCodecVideo.getOutputBuffers();
             startTime = System.currentTimeMillis()-1000;
             long now;
             long lastTime = 0;
-            long lastPts = 0;
+            long lastPts = 0,lastDts=0;
             long startPts = -1;
             int frameCount = 0;
             while(running){
@@ -113,7 +114,9 @@ public class HlsDecoder extends BaseDecoder {
                     long diff = pes.pts-lastPts;
                     try {
                         if(Math.abs(diff)>100){
-                            logger.error("时间戳异常：pes.pts="+pes.pts+",lastPts="+lastPts+",diff="+diff);
+                            logger.error("时间戳异常：pes.pts="+pes.pts+",pes.dts="+pes.dts+",lastPts="+lastPts+",lastDts=" +
+                                    lastDts+",diff0="+diff+",diff1=" +(pes.dts-lastDts)+
+                                    ",pesCount="+pesCount);
                             diff = 100;
                         }
                         while((now-lastTime<diff)&&running){
@@ -150,6 +153,7 @@ public class HlsDecoder extends BaseDecoder {
                         //inputBuffers[inputBufferIndex].put(data.getBuffers(), data.getBufferOffset() + pes.payload, length);
                         mediaCodecVideo.queueInputBuffer(inputBufferIndex,0,length,pes.pts,0);
                         lastPts = pes.pts;
+                        lastDts = pes.dts;
                         int outputBufferIndex = mediaCodecVideo.dequeueOutputBuffer(info,0);
                         if (outputBufferIndex >= 0&&running&&inited) {
                             while (outputBufferIndex >= 0 &&running&&inited) {
@@ -179,6 +183,8 @@ public class HlsDecoder extends BaseDecoder {
                 }
 
             }
+        }else{
+            logger.debug("解码器初始化异常，无法继续任何操作！");
         }
         demuxer.stopDemuxer();
         if(mediaPlayer!=null){
@@ -190,6 +196,7 @@ public class HlsDecoder extends BaseDecoder {
         mediaCodecVideo = null;
         frames.clear();
         frames = null;
+        System.gc();
     }
 
     int pesCount=0;
@@ -200,13 +207,17 @@ public class HlsDecoder extends BaseDecoder {
             logger.debug("有PES数据来了，准备解码，pts="+pes.pts+",dts="+pes.dts+",payload="+pes.payload+",len="+(pes.data.getBytesAvailable()-pes.payload)+",pesCount="+pesCount);
         }
 */
+        pesCount++;
         if(seeking){
             logger.warn("正在跳转，暂时不处理数据");
             return;
         }
-        pesCount++;
+        if(!inited){
+            logger.warn("解码器还没初始化好，放弃当前帧："+pesCount+",pts="+pes.pts);
+            return;
+        }
         int i=0;
-        while(running&&frames!=null&&frames.size()>25){
+        while(running&&frames!=null&&frames.size()>125){
             try {
                 sleep(100);
                 i++;
@@ -314,6 +325,12 @@ public class HlsDecoder extends BaseDecoder {
             logger.debug("结束啦");
             running =false;
         }
+    }
+
+    @Override
+    public void onStreamStart() {
+        logger.debug("stream start！");
+        demuxer.reset();
     }
 
 }

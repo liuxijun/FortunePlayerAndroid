@@ -24,14 +24,14 @@ public class PES {
     public int payload_len;
 
     /** Save the first chunk of PES data. **/
-    public PES(ByteArray dat,boolean aud) {
+    public PES(ByteArray dat,boolean aud) throws Exception{
         data = dat;
         audio = aud;
         parse();
     };
 
     /** When all data is appended, parse the PES headers. **/
-    private void parse() {
+    private void parse() throws Exception {
         data.position = 0;
         // Start code prefix and packet ID.
         long prefix  = data.read_32();
@@ -42,7 +42,7 @@ public class PES {
         if ((audio && (prefix > 0x1df || prefix < 0x1c0 && prefix != 0x1bd)) || (!audio && prefix != 0x1e0 && prefix != 0x1ea && prefix != 0x1bd)) {
             logger.error("PES start code not found or not AAC/AVC: " + String.format("0x%X",prefix)+",bufferOffset="+
                     data.bufferOffset+",bytesAvailable="+data.bytesAvailable+",position="+data.position);
-            throw new Error("PES start code not found or not AAC/AVC: " + String.format("0x%X",prefix));
+            throw new Exception("PES start code not found or not AAC/AVC: " + String.format("0x%X",prefix));
         }
         // read len
         len = data.readUnsignedShort();

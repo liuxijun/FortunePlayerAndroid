@@ -14,6 +14,7 @@ public interface Decoder {
     void onVideoSizeChanged(int width,int height);
     void onFramesReady(PES pes);
     void finished();
+    void onStreamStart();
     void onTsFinished();
     boolean seekTo(int position);
     int getDuration();

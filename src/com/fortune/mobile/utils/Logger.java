@@ -11,13 +11,17 @@ import java.util.logging.Level;
  */
 public class Logger {
     private String TAG;
-    private boolean isAndroid = true;
+    private static boolean isAndroid = true;
     private java.util.logging.Logger logger;
     public static Logger getLogger(Class cls){
         return getLogger(cls.getSimpleName());
     }
     public static Logger getLogger(String tag){
         return new Logger(tag);
+    }
+
+    public void setAndroid(boolean isAndroid){
+        this.isAndroid = isAndroid;
     }
     private Logger(String tag){
         this.TAG = tag;

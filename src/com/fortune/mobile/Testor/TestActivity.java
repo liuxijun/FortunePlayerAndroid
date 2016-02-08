@@ -73,9 +73,54 @@ public class TestActivity extends Activity implements MediaPlayer.OnBufferingUpd
                 }
             });
         }
+        setOnClick(R.id.buttonLocation,clickOnButton);
+        setOnClick(R.id.buttonFor4,clickOnButton);
+        setOnClick(R.id.buttonFor6,clickOnButton);
+        setOnClick(R.id.buttonFor8,clickOnButton);
+        setOnClick(R.id.buttonFor9,clickOnButton);
     }
-
+    public long getRandomOf(int max){
+        return Math.round(Math.floor(Math.random()*max+0.5));
+    }
+    public void randomOf(int id){
+        switch(id){
+            case R.id.buttonFor4:
+                setTextOfRandom(""+getRandomOf(4));
+                break;
+            case R.id.buttonFor6:
+                setTextOfRandom(""+getRandomOf(6));
+                break;
+            case R.id.buttonFor8:
+                setTextOfRandom(""+getRandomOf(8));
+                break;
+            case R.id.buttonFor9:
+                setTextOfRandom(""+getRandomOf(9));
+                break;
+            case R.id.buttonLocation:
+                setTextOfRandom(""+getRandomOf(8)+","+getRandomOf(8));
+                break;
+        }
+    }
+    public void setTextOfRandom(String result){
+        TextView tv =(TextView) findViewById(R.id.textViewResult);
+        if(tv!=null){
+            tv.setText(result);
+        }
+    }
+    public View.OnClickListener clickOnButton = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            randomOf(view.getId());
+        }
+    };
+    public void setOnClick(int id,View.OnClickListener onClick){
+        View obj = findViewById(id);
+        if(obj!=null){
+            obj.setOnClickListener(onClick);
+        }
+    }
     public void doTestPlay(){
+        //http://192.168.1.99:58080/encode/20151116152330_58767_wuyunbeihoudi_dexingfuxian.BD.1280x720.zhongyingshuangzimu.512K_640x480.m3u8.m3u8
         EditText editTextUrl = (EditText) findViewById(R.id.editTextUrl);
         if (editTextUrl != null) {
             String url = editTextUrl.getText().toString();

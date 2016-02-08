@@ -18,7 +18,7 @@ public class Testor extends Thread implements Decoder {
     private boolean running=true;
     public Testor(){
         demuxer = new TSDemuxer(this);
-        reader = new M3U8Reader(this,"http://192.168.1.99:58080/encode/20151116152330_58767_wuyunbeihoudi_dexingfuxian.BD.1280x720.zhongyingshuangzimu.512K_640x480.m3u8.m3u8");
+        reader = new M3U8Reader(this,"http://192.168.1.13:28080/vod/01.mp4.m3u8");
     }
 
     public boolean isRunning(){
@@ -38,7 +38,9 @@ public class Testor extends Thread implements Decoder {
     }
     public static void main(String[] args){
         Logger logger = Logger.getLogger(Testor.class.getName());
+        logger.setAndroid(false);
         Testor testor = new Testor();
+
         testor.start();
         while(testor.running){
             try {
@@ -87,17 +89,18 @@ public class Testor extends Thread implements Decoder {
         return demuxer.append(buffer,startPos,length);
     }
 
+
     @Override
     public void onVideoSizeChanged(int width, int height) {
-        logger.debug("获取到了视频大小："+width+"x"+height);
+        logger.debug("获取到了视频大小："+width+"x"+height+",pesCount="+pesCount);
     }
     int pesCount=0;
     public void onFramesReady(PES pes) {
 //        logger.debug("有PES数据来了，准备解码，pts="+pes.pts+",payload="+pes.payload+",len="+(pes.data.bytesAvailable-pes.payload));
-        pesCount++;
-        if(pesCount%100==0){
+        if(pesCount%10==0){
             logger.debug("有PES数据来了，准备解码，pts="+pes.pts+",dts="+pes.dts+",payload="+pes.payload+",len="+(pes.data.bytesAvailable-pes.payload)+",pesCount="+pesCount);
         }
+        pesCount++;
     }
 
     @Override
@@ -111,6 +114,11 @@ public class Testor extends Thread implements Decoder {
             logger.debug("结束啦");
             running =false;
         }
+    }
+
+    @Override
+    public void onStreamStart() {
+
     }
 
     @Override

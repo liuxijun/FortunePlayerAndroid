@@ -22,9 +22,9 @@
                 android:layout_height="wrap_content"
                 android:id="@+id/editTextUrl"
                 android:layout_weight="1"
-                android:text="http://192.168.1.99:58080/encode/20151116152330_58767_wuyunbeihoudi_dexingfuxian.BD.1280x720.zhongyingshuangzimu.512K_640x480.m3u8.m3u8"
                 android:maxLines="1"
-                android:singleLine="true"/>
+                android:singleLine="true"
+                android:text="http://192.168.1.13:28080/vod/01.mp4.m3u8"/>
 
         <Button
                 android:layout_width="wrap_content"
@@ -80,6 +80,72 @@
                     android:layout_toEndOf="@+id/tvBegin"
                     android:layout_toStartOf="@+id/tvEnd" android:max="5400000" android:progress="0"/>
         </RelativeLayout>
+
+        <LinearLayout
+                android:orientation="vertical"
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:layout_below="@+id/surfaceView"
+                android:layout_alignEnd="@id/surfaceView">
+
+            <LinearLayout
+                    android:orientation="horizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                <Button
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="位置初始化"
+                        android:id="@+id/buttonLocation"
+                        android:layout_below="@+id/surfaceView"
+                        android:layout_alignParentStart="true"/>
+
+                <Button
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="4"
+                        android:id="@+id/buttonFor4"
+                        android:layout_alignTop="@+id/buttonLocation"
+                        android:layout_toEndOf="@+id/buttonLocation"/>
+
+                <Button
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="6"
+                        android:id="@+id/buttonFor6"
+                        android:layout_alignTop="@+id/buttonFor8"
+                        android:layout_toEndOf="@+id/buttonFor4"/>
+
+                <Button
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="8"
+                        android:id="@+id/buttonFor8"
+                        android:layout_below="@+id/surfaceView"
+                        android:layout_toEndOf="@+id/buttonFor6"/>
+
+                <Button
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="9"
+                        android:id="@+id/buttonFor9"
+                        android:layout_below="@+id/surfaceView"
+                        android:layout_toEndOf="@+id/buttonFor8"/>
+
+            </LinearLayout>
+
+            <TextView
+                    android:layout_width="fill_parent"
+                    android:layout_height="fill_parent"
+                    android:id="@+id/textViewResult"
+                    android:layout_gravity="center_horizontal"
+                    android:gravity="center_vertical|center_horizontal"
+                    android:textColor="#FFF"
+                    android:textSize="64sp"
+                    android:text="6,8"/>
+        </LinearLayout>
+
     </RelativeLayout>
 
 </LinearLayout>
