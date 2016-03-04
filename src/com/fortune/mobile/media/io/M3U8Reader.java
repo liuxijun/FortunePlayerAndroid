@@ -68,16 +68,30 @@ public class M3U8Reader extends Thread {
         if(m3u8Content!=null&&!"".equals(m3u8Content.trim())){
             m3u8.addStream(0,1,url,m3u8Content);
             byte[] buffer = new byte[188*1000];
+
             for(M3U8Stream stream:m3u8.getStreams()){
                 if(currentStream==null){
                     currentStream = stream;
+                }else{
+                    logger.error("现在只播放第一道流");
+                    break;
                 }
                 if(willStop){
                     break;
                 }
                 allM3U8Duration = stream.getAllDuration();
                 List<M3U8Segment> segments = stream.getSegments();
-                for(int i=0,l=segments.size();i<l;i++){
+                int startIdx = 0;
+                if(stream.isLive()){
+                    startIdx = segments.size()-3;
+                    if(startIdx<0){
+                        startIdx = 0;
+                    }
+                }
+                int lastMediaSequence = stream.getMediaSequence();
+                int target =Math.round(stream.getTargetDuration());
+                long lastDownloadTime = System.currentTimeMillis();
+                for(int i=startIdx,l=segments.size();i<l;i++){
                     if(willSeekTo>=0){
                         i = willSeekTo;
                         seeking = false;
@@ -88,6 +102,30 @@ public class M3U8Reader extends Thread {
                     }
                     String segmentUrl = segment.getUrl();
                     getSegementFromUrl(segmentUrl, null, null,buffer);
+                    int mediaSequence = stream.getMediaSequence();
+                    if(stream.isLive()&&i==l-1){
+                        logger.debug("直播最后一个ts请求，所以要刷新stream！");
+                        String streamUrl = stream.getUrl();
+                        while(mediaSequence==lastMediaSequence){
+                            if(willStop){
+                                break;
+                            }
+                            m3u8Content = messager.postToHost(streamUrl,null);
+                            stream = new M3U8Stream(stream.getBandwidth(),stream.getProgramId(),streamUrl,m3u8Content);
+                            mediaSequence = stream.getMediaSequence();
+                            if(mediaSequence == lastMediaSequence){
+                                logger.debug("还没有更新，继续等待"+(target/2)+"秒");
+                                try {
+                                    sleep(target/2*1000);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }
+                        segments = stream.getSegments();
+                        l = segments.size();
+                        i=l-2;
+                    }
 /*
                     dataLength+=data.getContentLength();
                     if(rootPath!=null){

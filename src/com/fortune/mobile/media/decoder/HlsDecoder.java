@@ -1,5 +1,7 @@
 package com.fortune.mobile.media.decoder;
 
+import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.view.Surface;
@@ -7,6 +9,7 @@ import com.fortune.mobile.media.MediaPlayer;
 import com.fortune.mobile.media.demuxer.ByteArray;
 import com.fortune.mobile.media.demuxer.PES;
 import com.fortune.mobile.media.demuxer.TSDemuxer;
+import com.fortune.mobile.media.demuxer.model.AudioTrack;
 import com.fortune.mobile.media.io.M3U8Reader;
 import com.fortune.mobile.utils.Logger;
 
@@ -27,7 +30,8 @@ public class HlsDecoder extends BaseDecoder {
     private M3U8Reader reader;
     private TSDemuxer demuxer;
     private Logger logger=Logger.getLogger(HlsDecoder.class);
-    private MediaCodec mediaCodecVideo=null;
+    private MediaCodec mediaCodecVideo=null,mediaCodecAudio=null;
+    private android.media.AudioTrack audioTrack=null;
     //Vector<PES> tags=new Vector<PES>();
     Queue<PES> frames = new LinkedList<PES>();
     public HlsDecoder(MediaPlayer mediaPlayer,String url,Surface videoSurface){
@@ -103,8 +107,20 @@ public class HlsDecoder extends BaseDecoder {
                         continue;
                     }
                     if(pes.audio){
-                        //暂时不处理音频
+                        //处理音频
+                        int inputBufferIndex =-1;
+                        int times = 0;
+                        while(inputBufferIndex<0&&times<5&&running){
+                            if(mediaCodecVideo!=null){
+                                inputBufferIndex = mediaCodecVideo.dequeueInputBuffer(timeoutUs);
+                            }else{
+                                break;
+                            }
+                            times++;
+                        }
                         continue;
+                    }else{
+                        //视频
                     }
                     //tag.getData()
                     if(startPts<0){
@@ -332,5 +348,29 @@ public class HlsDecoder extends BaseDecoder {
         logger.debug("stream start！");
         demuxer.reset();
     }
-
+    int currentSampleRate=-1;
+    int currentChannelCount=-1;
+    int currentAudioType = -1;
+    public void onAudioReady(int sampleRate,int channelCount,int audioType){
+        if(currentAudioType!=audioType||currentChannelCount!=channelCount||currentSampleRate!=sampleRate){
+            return;
+        }
+        if(mediaCodecVideo!=null){
+            mediaCodecAudio.stop();
+            mediaCodecAudio.release();
+        }
+        if(audioTrack!=null){
+            audioTrack.stop();
+            audioTrack.release();
+        }
+        mediaCodecAudio = MediaCodec.createDecoderByType("audio/aac");
+        MediaFormat mediaFormat = MediaFormat.createAudioFormat("audio/aac",sampleRate,channelCount);
+        mediaCodecAudio.configure(mediaFormat,null,null,0);
+        int channelConfiguration = channelCount == 1 ? AudioFormat.CHANNEL_OUT_MONO : AudioFormat.CHANNEL_OUT_STEREO;
+        int minSize = android.media.AudioTrack.getMinBufferSize(sampleRate, channelConfiguration, AudioFormat.ENCODING_PCM_16BIT);
+        audioTrack = new android.media.AudioTrack(AudioManager.STREAM_MUSIC, sampleRate, channelConfiguration,
+                AudioFormat.ENCODING_PCM_16BIT, minSize, android.media.AudioTrack.MODE_STREAM);
+        // start playing, we will feed the AudioTrack later
+        audioTrack.play();
+    }
 }

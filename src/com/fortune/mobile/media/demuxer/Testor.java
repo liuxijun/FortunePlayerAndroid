@@ -94,6 +94,12 @@ public class Testor extends Thread implements Decoder {
     public void onVideoSizeChanged(int width, int height) {
         logger.debug("获取到了视频大小："+width+"x"+height+",pesCount="+pesCount);
     }
+
+    @Override
+    public void onAudioReady(int sampleRate,int channelCount,int audioType) {
+
+    }
+
     int pesCount=0;
     public void onFramesReady(PES pes) {
 //        logger.debug("有PES数据来了，准备解码，pts="+pes.pts+",payload="+pes.payload+",len="+(pes.data.bytesAvailable-pes.payload));

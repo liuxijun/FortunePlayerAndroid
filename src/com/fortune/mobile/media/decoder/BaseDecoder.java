@@ -33,6 +33,11 @@ public class BaseDecoder extends Thread implements Decoder{
     }
 
     @Override
+    public void onAudioReady(int sampleRate, int channelCount, int audioType) {
+
+    }
+
+    @Override
     public void onFramesReady(PES pes){
 
     }

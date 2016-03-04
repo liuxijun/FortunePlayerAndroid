@@ -12,6 +12,7 @@ import java.util.Vector;
 public interface Decoder {
     long appendBuffer(byte[] buffer,int startPos,int length);
     void onVideoSizeChanged(int width,int height);
+    void onAudioReady(int sampleRate,int channelCount,int audioType);
     void onFramesReady(PES pes);
     void finished();
     void onStreamStart();
